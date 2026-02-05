@@ -2,6 +2,7 @@ import requests
 import os,sys
 import logging
 import json
+import re
 from configurator import Config
 
 class Emedgene:
@@ -18,9 +19,7 @@ class Emedgene:
         self.password    = configs.Emedgene.password
         self.prag_server = configs.Emedgene.endpoint
 
-        self.pheno_auth  = configs.Phenotips.auth
-        self.pheno_secret= configs.Phenotips.secret
-        self.pheno_url   = configs.Phenotips.endpoint
+        self.database_tsv = configs.Phenotips.database_tsv
 
 
     def authenticate(self):
@@ -106,47 +105,45 @@ class Emedgene:
         #Get the notes from the json file
         if "notes" in json_file.keys():
             notes=json_file['notes']
-            #We expect a format of pheno ID starting with P00...
-            if notes[0:3]=="P00" and len(notes)==8:
+            if len(notes) == 0:
+                return "No info"
+
+            #We expect a format of pheno ID starting with P with 7 digits
+            pattern = r"P\d{7}"
+            if re.fullmatch(pattern, notes):
                 return notes
             else:
-                start = notes.find("P0")
-                end = notes.find("\n",start)
-                corrected = notes[start:end]
-                if len(corrected) == 8:
-                    return corrected
+                logging.warning(f"{sample} appears to be of a different format:{notes}")
+                corrected = re.findall(pattern, notes)
+                if len(corrected) != 0:
+                    return corrected[0]
                 else:
-                    logging.warning(f"pheno_id appears to be of a different format:{notes}")
                     return ""
         else:
             with open('error.json','w') as fp:
                 json.dump(json_file,fp,indent=4)
             logging.warning(f"Pheno ID could not be found in json response. See error.json")
 
-
-    def phenotips_import_HPO_request(self,pheno_id):
+    def phenotips_import_HPO_from_tsv(self, pheno_id):
         """
         Returns a string containing the phenotype HPO terms of a patient
         - `pheno_id`: String of the Phenotips identifier ex.: P0000XXX... usually obtained from Emedgene
         - Returns : str HP:00XXXXX,HP:0000XXX,...
         """
-        url=f"{self.pheno_url}/rest/patients/{pheno_id}"
-        headers = {
-            "accept": "application/json",
-            "authorization": self.pheno_auth,
-            "X-Gene42-Secret": self.pheno_secret
-        }
-        response = requests.get(url, headers=headers)
-        data=response.json()
-
-        #Parse the list for observed phenotypes (reject non observed ones)
-        hpo_list=[]
-        if "features" in data.keys():
-            for terms in data["features"]:
-                if terms["observed"] =='yes':
-                    hpo_list.append(terms["id"])
-        else:
-            logging.warning(f"Features could not be found on Phenotips for sample {pheno_id}")
-
-        return((",").join(hpo_list).replace('\'',""))
-
+        hpo_list = []
+        db_tsv = self.database_tsv
+        if pheno_id is None or len(pheno_id) == 0:
+            logging.warning(f"Phenotips ID is empty or None")
+            return ""
+        elif pheno_id == "No info":
+            return pheno_id
+        with open(db_tsv, 'r') as tsv_file:
+            for line in tsv_file:
+                if line.startswith(pheno_id):
+                    # Extract HPO terms from the line
+                    terms = line.strip().split('\t')[1:]
+                    hpo_list.extend(terms)
+        if len(hpo_list) == 0:
+            logging.warning(f"No HPO terms found in TSV database for sample {pheno_id}")
+            return pheno_id
+        return (",").join(hpo_list).replace('\'',"")

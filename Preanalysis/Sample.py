@@ -62,10 +62,10 @@ class Sample:
 			emg_case_json	=	Emedgene(config_file=config_file).get_case_json(emg_case_id)
 			self.case_status =	self.find_status(emg_case_json)
 
-			#TODO: Make class for Phenotips
-			pheno_case_id	=	Emedgene(config_file=config_file).get_pheno_id(json_file=(emg_case_json))
+			#Note: Our contract with phenotips is over so we retrieve phenotypes from the database TSV instead
+			pheno_case_id	=	Emedgene(config_file=config_file).get_pheno_id(sample=self.name,json_file=(emg_case_json))
 			if self.case_status["Affected"]:
-				self.phenotypes		=	Emedgene(config_file=config_file).phenotips_import_HPO_request(pheno_case_id)
+				self.phenotypes		=	Emedgene(config_file=config_file).phenotips_import_HPO_from_tsv(pheno_case_id)
 			else:
 				self.phenotypes		=	""
 		

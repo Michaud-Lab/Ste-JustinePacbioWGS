@@ -7,9 +7,7 @@
 		},
 	"Phenotips":
 		{
-			"auth":"Basic XXX",
-			"secret":"YYY",
-			"endpoint":"https://chusj.phenotips.com"
+			"database_tsv": "/home/felixant/links/scratch/phenotips_database.tsv"
 		},
 	"GeneYX":
 		{
