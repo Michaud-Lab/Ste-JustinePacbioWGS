@@ -11,6 +11,10 @@
 			"apiUserId": "XXX",
 			"apiUserKey": "YYY"
 		},
+	"Phenotips":
+		{
+			"database_tsv": "/home/felixant/links/scratch/phenotips_database.tsv"
+		},
 	"Paths":
 		{
 			"run_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/",
