@@ -10,15 +10,24 @@ Note that all of these scripts are meant to be run on the Digital Research Allia
 Once out of the sequencer, the long-read sequencing data is automatically transfered on a in-house smrtlink server, for temporary storage. 
 Since storage and computing resources are limited on this server, we transfer the data to a cluster of the Alliance, [Narval](https://docs.alliancecan.ca/wiki/Narval).
 \
-From there, we pre-process the data with the scripts included here in [Preprocessing](#Pre-analysis). Then, the analysis itself is done using PacBio's [WGS pipeline](https://github.com/PacificBiosciences/HiFi-human-WGS-WDL). Note that I have my own fork of this pipeline [here](https://github.com/FelixAntoineLeSieur/HiFi-human-WGS-WDL), which should be included here as a submodule in [Analysis](#Analysis). It contains some minor changes aimed at making the pipeline usable in the Alliance environment.
+\
+<img width="809" height="1055" alt="General_Steps_Flowchart" src="https://github.com/user-attachments/assets/5c2e1cac-0c28-4f80-8731-165f79da92dd" />
+\
+\
+From there, we pre-process the data with the scripts included here in [Preanalysis](#Pre-analysis). Then, the analysis itself is done using PacBio's [WGS pipeline](https://github.com/PacificBiosciences/HiFi-human-WGS-WDL). Note that I have my own fork of this pipeline [here](https://github.com/FelixAntoineLeSieur/HiFi-human-WGS-WDL), which should be included here as a submodule in [Analysis](#analysis). It contains some minor changes aimed at making the pipeline usable in the Alliance environment.
 \
 Once the data has been processed by the WGS pipeline, we want to setup tertiary analysis, primarily through the GeneYX website, though different analysis and reports will likely be added later. 
-This will described here in [Post-analysis](#post-analysis)
+This will described here in [Postanalysis](#post-analysis)
 
 ## Requirements
-Using the scripts here requires access to GeneYX, Emedgene and Phenotips. Access information and paths must be defined in the config (by default named .myconf.json). \
-
-**TODO** [The specific tool versions will be described here later] 
+Using the scripts here requires access to GeneYX and Emedgene. Access information and paths must be defined in the [config](#config) (by default named .myconf.json). \
+Each section usually has their own requirements.txt files in terms of venv. 
+For example, the steps to get the requirements for the Preanalysis requirements on the Alliance:
+1-	module load python/3.11
+2-	virtualenv --no-download ENV_Preanalysis
+3-  source ENV_Preanalysis/bin/activate
+4-  pip install --no-index --upgrade pip
+5-  pip install -r Preanalysis/preanalysisRequirements.txt 
 
 ### Files and directories
 My fork of the analysis pipeline is available [here](https://github.com/FelixAntoineLeSieur/HiFi-human-WGS-WDL) and includes installation instruction. \
