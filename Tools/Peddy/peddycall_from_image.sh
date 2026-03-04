@@ -121,7 +121,7 @@ if [ ! -f "$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz" ]
 mkdir -p "$input_directory/Peddy_analyses"
 echo "Running Peddy relate"
 
-apptainer exec -C -B $SCRATCH --pwd "$input_directory/Peddy_analyses" -w "$SLURM_TMPDIR" \
+apptainer exec -C -B $HOME -B $SCRATCH --pwd "$input_directory/Peddy_analyses" -W "$SLURM_TMPDIR" \
 	$image \
 	python -m peddy --plot --sites hg38 --prefix "${family_id}_peddy" \
 	"$input_directory/$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz" \

@@ -27,9 +27,9 @@ for var in "$@"; do
  echo $var
 done
 
-usage() { echo "Usage: $0  [-p <prefix>] [-b <haplotagged bam>] [-i <haplotagged bam index>] [-s <supporting reads>] [-v <SV vcf>] [-r <resource folder>] [-o <Output Dir>] [-h <Ste-JustinePacbioWGS folder>]" 1>&2; exit 1; }
+usage() { echo "Usage: $0  [-p <prefix>] [-b <haplotagged bam>] [-i <haplotagged bam index>] [-s <supporting reads>] [-v <SV vcf>] [-r <resource folder>] [-o <Output Dir>] [-t <tools folder>]" 1>&2; exit 1; }
 
-while getopts ":p:b:i:r:v:o:s:h:" o; do
+while getopts ":p:b:i:r:v:o:s:t:" o; do
     case "${o}" in
         p)
             echo "prefix: ${OPTARG}"
@@ -55,8 +55,8 @@ while getopts ":p:b:i:r:v:o:s:h:" o; do
         o)
             outputDir=${OPTARG}
             ;;
-        h)
-            here_folder=${OPTARG}
+        t)
+            tools_folder=${OPTARG}
             ;;
 	      *)
             echo "Received invalid option"
@@ -76,18 +76,16 @@ cp "$supporting_reads" "$SLURM_TMPDIR"
 supporting_reads="$(basename $supporting_reads)"
 cp "$vcf" "$SLURM_TMPDIR"
 vcf="$(basename $vcf)"
-# We manually pass the script folder because on Fir $0 is in SLURMTMPDIR when launched from sbatch
-echo "here folder: $here_folder"
 
 # #This is a home-made image, not hosted on dockerhub for now
 image=$APPTAINER_CACHEDIR/svtopo_v0.3.0.sif
 if [ ! -f $image ]; then
   echo "Building SVTopo apptainer image"
-  apptainer build $image $here_folder/../Tools/SVTopo/svtopo.def
+  apptainer build $image $tools_folder/SVTopo/svtopo.def
 fi
 
 cp $resource_folder/GRCh38/ensembl.GRCh38.101.reformatted.gff3.gz "$SLURM_TMPDIR"
-cp $here_folder/../Tools/SVTopo/repeatmaskerUCSC.bed.gz "$SLURM_TMPDIR"
+cp $tools_folder/SVTopo/repeatmaskerUCSC.bed.gz "$SLURM_TMPDIR"
 cp $resource_folder/cnv.excluded_regions.hg38.bed.gz "$SLURM_TMPDIR"
 cp $image $SLURM_TMPDIR
 #As suggested in https://github.com/PacificBiosciences/SVTopo/blob/main/docs/user_guide.md for annotation

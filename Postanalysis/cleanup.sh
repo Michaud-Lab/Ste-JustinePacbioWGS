@@ -8,7 +8,7 @@
 # $-c <optional config file (default .myconf.json)>
 
 set -eu
-echo "Arguments:"
+echo "cleanup.sh Arguments:"
 for var in "$@"; do
  echo $var
 done
@@ -60,14 +60,15 @@ rm -rf $directory/*/call-upstream-*/call-pbmm2-0/call-pbmm2_align_wgs-*
 rm -rf $directory/*/call-upstream-*/call-pbmm2-0/call-split_input_bam/work*
 
 rm -rf $directory/*/call-upstream-*/call-samtools_merge/work*
+rm -rf $directory/*/call-*/call-merge_hifi_reads/work*
 
 #We don't need to keep the merged bam with failed reads
-rm -rf $directory/*/call-upstream-*/call-merge_hifi_fail_bams/work*
-rm -rf $directory/*/call-upstream-*/call-bait_fail_reads-*/work*
-rm -rf $directory/*/call-upstream-*/call-align_captured_fail_reads-*/work*
+rm -rf $directory/*/call-*/call-merge_hifi_fail_bams/work*
+rm -rf $directory/*/call-*/call-bait_fail_reads-*/work*
+rm -rf $directory/*/call-*/call-align_captured_fail_reads-*/work*
 
 #The aligned bam is an intermediate we don't necessarily need
-rm -rf $directory/*/call-upstream-*/call-merge_hifi_bams/work*
+rm -rf $directory/*/call-*/call-merge_hifi_bams/work*
 
 #The deepvariant model files take significant space and we no longer need them
 rm -rf $directory/*/call-upstream-*/call-deepvariant/call-deepvariant_make_examples-*

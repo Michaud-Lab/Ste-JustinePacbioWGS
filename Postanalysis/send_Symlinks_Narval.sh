@@ -18,15 +18,15 @@ destination_path="$HOME/projects/ctb-rallard/COMMUN/PacBioData/OutputFamilies"
 
 
 set -eu
-echo "Arguments:"
+echo "send_Symlinks_Narval Arguments:"
 for var in "$@"; do
  echo $var
 done
-usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>] [-h <here_folder>]" 1>&2; exit 1; }
+usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>]" 1>&2; exit 1; }
 config_file="$(dirname $0)/../.myconf.json"
 cluster="narval.alliancecan.ca"
 identity_line=""
-while getopts ":i:d:c:rh:" o; do
+while getopts ":i:d:c:r" o; do
 	case "${o}" in
 		i)
 			family_id=${OPTARG}
@@ -51,9 +51,6 @@ while getopts ":i:d:c:rh:" o; do
 			fi
 			identity_line="-e \"ssh -i $identity_file\""
 			;;
-		h)
-			here_folder=${OPTARG}
-			;;
 		*)
 			usage
 			;;
@@ -72,11 +69,10 @@ fi
 #We send only symlinks to allow globus to do the real file transfers
 #(Globus avoids symlinks)
 echo "Sending symlinks from $directory to $USER@$cluster:$destination_path/$family_id"
-echo "rsync -rlPv $identity_line --files-from=- \"$directory\" \"$USER@$cluster:$destination_path/$family_id\""
 if [ ! -n "$identity_line" ]; then
 	find "$directory" -type l -printf '%P\n' | \
-		rsync -rlPv --files-from=- "$directory" "$USER@$cluster:$destination_path/$family_id"
+		rsync -rl --files-from=- "$directory" "$USER@$cluster:$destination_path/$family_id"
 else
 	find "$directory" -type l -printf '%P\n' | \
-		rsync -rlPv -e "ssh -i $identity_file" --files-from=- "$directory" "$USER@$cluster:$destination_path/$family_id"
+		rsync -rl -e "ssh -i $identity_file" --files-from=- "$directory" "$USER@$cluster:$destination_path/$family_id"
 fi

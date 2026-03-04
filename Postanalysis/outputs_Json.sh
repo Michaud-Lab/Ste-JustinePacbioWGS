@@ -13,7 +13,7 @@ destination_path="$HOME/projects/ctb-rallard/COMMUN/PacBioData/OutputFamilies"
 # $-c <optional config file (default .myconf.json)>
 
 set -eu
-echo "Arguments:"
+echo "outputs_Json.sh Arguments:"
 for var in "$@"; do
  echo $var
 done
@@ -118,9 +118,5 @@ done
 
 s3_destination="$HOME/projects/ctb-rallard/COMMUN/PacBioData/S3-Storage/"
 echo "Sending S3-Storage to Narval: $destination_path/$family_id"
-echo "Rsync command:"
-echo "rsync -rlv $s3_local/$family_id 'NarvalInteractiveRobot:$s3_destination'"
-rsync -rlv $s3_local/$family_id "NarvalInteractiveRobot:$s3_destination"
-find "$s3_local/$family_id" -type l -printf '%P\n' | \
-	rsync -rlvP --files-from=- "$s3_local/$family_id" "NarvalInteractiveRobot:$destination_absolute_path"
+rsync -rl $s3_local/$family_id "NarvalInteractiveRobot:$s3_destination"
 echo "Rsync Complete"

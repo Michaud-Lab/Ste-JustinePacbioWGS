@@ -20,7 +20,7 @@ set -eo pipefail
 module load python/3.11 htslib/1.22.1 bcftools/1.22 bedtools/2.31.0 apptainer/1.3.5 arrow/21.0.0 libyaml
 
 usage() { 
-	printf "Usage: \n $0 [-i <familyID>]  [-g <group (i.e. Pragmatiq, decodeur)>] \n
+	printf "Usage: \n $0 [-i <familyID>]  [-g <group (i.e. prag, decode)>] \n
  [-s {to run every step, otherwise will enter interactive mode}] \n
  [-c <Optional_config_file>] \n" 
  1>&2; exit 1; }
@@ -64,7 +64,8 @@ while getopts "i:c:g:s" o; do
 done
 
 
-here_folder=$(realpath "$(dirname $0)")
+here_folder=$(realpath "$(dirname $0)") #Postanalysis folder
+tools_folder="$here_folder/../Tools"
 if [ -z "$1" ]; then
 	usage
 fi
@@ -80,16 +81,12 @@ elif [ ! -f "${config_file}" ]; then
 	usage
 fi
 
-#samplesheet=$(python3 -c "import json; print(json.load(open('${config_file}'))['Paths']['sample_sheet_path'])")/${id}.json
 samplesheet=$(jq -r '.Paths.sample_sheet_path' ${config_file})/${id}.json
-
-
-
 
 #------Functions------#
 #This function loads the environment for GeneYX scripts
 function loadEnv(){
-	ENVDIR=$here_folder/../Tools/$1
+	ENVDIR=$tools_folder/$1
 	if [ -d "$ENVDIR" ]; then
 		source $ENVDIR/bin/activate
 	else
@@ -98,10 +95,10 @@ function loadEnv(){
 		pip install --no-index --upgrade pip
 		if [ "$1" == "GeneYX_env" ]; then
 			echo "Loading GeneYX environment"
-			pip install -r $here_folder/../Tools/requirementsGeneYXUpload.txt
+			pip install -r $tools_folder/requirementsGeneYXUpload.txt
 		elif [ "$1" == "Globus_env" ]; then
 			echo "Loading Globus environment"
-			pip install -r $here_folder/../Tools/requirementsGlobus.txt
+			pip install -r $tools_folder/requirementsGlobus.txt
 		fi
 	fi
 }
@@ -121,32 +118,45 @@ function ask_yes_no() {
 			echo "please select 1 or 2" ;;
 		esac
 	done
+	echo "$question: $yn" >> $report_file
 	printf -v "$var_name" '%s' "$result"
 }
 
 #Left-align and normalize SNV VCF for GeneYX
 function Normalize() {
+	echo normalizing $1 >> "$report_file"
 	local norm_output="$directory/$1.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz"
 	if [[ ! -f "$norm_output" ]]; then
-		bcftools norm -m-any --check-ref -w -f "$fasta_path" -Oz -o "$norm_output" "$2"
+		bcftools norm -m-any --check-ref -w -f "$fasta_path" -Oz -o "$norm_output" "$2" >> "$report_file" 2>&1
 	fi
 	if [ ! -f "$norm_output.tbi" ]; then
 		tabix -p vcf "$norm_output"
+	fi
+	if [ -f "$norm_output" ] && [ -f "$norm_output.tbi" ]; then
+		echo "Normalization ok for $1" >> "$report_file"
+	else exit 1
 	fi
 	echo "$norm_output"
 }
 
 #Unifies the 4 differemt VCFs must be done for all samples in group
 function UnifyVCF() {
-if [ ! -f "$directory/$1-unifiedTrioVCFv2.vcf.gz" ]; then
-	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/UnifyVcf/PacBioUnifyVcf.py -o "$directory/$1-unifiedTrioVCFv2.vcf" -s "$3" -r "$2" -b $here_folder/geneyx.analysis.api_CHUSJ/scripts/UnifyVcf/STRchive-disease-loci.hg38.TRGT.bed
+	local unify_output="$directory/$1-unifiedTrioVCFv2.vcf.gz"
+	echo "Unifying VCFs for $1" >> "$report_file"
+if [ ! -f "$unify_output" ]; then
+	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/UnifyVcf/PacBioUnifyVcf.py \
+		-o "$directory/$1-unifiedTrioVCFv2.vcf" \
+		-s "$3" -r "$2" -c $3 \
+		-b $here_folder/geneyx.analysis.api_CHUSJ/scripts/UnifyVcf/STRchive-disease-loci.hg38.TRGT.bed >> "$report_file" 2>&1
 fi
-
-ls "$directory/$1-unifiedTrioVCFv2.vcf.gz"
+if [ -f "$unify_output" ]; then
+	echo "Unify ok for $1" >> "$report_file"
+else exit 1
+fi
+echo "$unify_output"
 }
 
 #Heredoc to build the samplefiles
-
 function buildSamplefiles() {
 	cat << EOF >>$directory/modifiedGeneYXTrio$family_id.json
 	{
@@ -255,7 +265,7 @@ function buildQCData() {
 	>$SCRATCH/QCData/${family_id}_${1}_QC_new.json
 	cat << EOF >>"$SCRATCH/QCData/${family_id}_${1}_QC_new.json"
 	{
-		"sampleSn": "$(basename "$proband_normalized_SNV")",
+		"sampleSn": "$(basename "${1}_${family_id}")",
 		"PassedReadsNum": $bam_reads,
 		"FailedReadsNum": $failed_reads,
 		"MappedReadsNum": $map_reads,
@@ -295,6 +305,7 @@ family_id=$id
 resource_file=$(python3 -c "import json; print(json.load(open('${config_file}'))['Paths']['ref_maps'])")
 resource_folder=$(dirname "$resource_file")
 tertiary_map=$(python3 -c "import json; print(json.load(open('${config_file}'))['Paths']['tertiary_maps'])")
+output_path=$(python3 -c "import json; print(json.load(open('${config_file}'))['Paths']['output_path'])")
 fasta_path=$(grep -wm 1 'fasta' "${resource_file}" | cut -f2)
 if [ ! -f "$fasta_path" ]; then
 	echo "Could not find fasta at $fasta_path"
@@ -304,6 +315,9 @@ fi
 if [[ -d "$SCRATCH/$family_id" ]]; then
 	echo "Directory found at $SCRATCH/$family_id"
 	directory="$SCRATCH/$family_id"
+elif [[ -d "$output_path/$family_id" ]]; then
+	echo "Directory found at $output_path/$family_id"
+	directory="$output_path/$family_id"
 else
 	echo "Directory not found for $family_id"
 	exit
@@ -315,6 +329,10 @@ else
 	exit
 fi
 
+report_file="$directory/R-${id}_$(date +'%Y-%m-%d_%H-%M-%S')_postprocess_report.txt"
+echo "Report file is $report_file"
+echo "Postprocessing started at $(date) for family $id group $group_name" > "$report_file"
+echo "Runall is: $run_all" >> "$report_file"
 
 #Get the haplotagged bams for each sample
 for sample in $directory/_LAST/out/merged_haplotagged_bam/*/;do
@@ -327,12 +345,10 @@ for sample in $directory/_LAST/out/merged_haplotagged_bam/*/;do
 	elif [[ "$sample_dir" == "1" ]]; then
 		mother_bam=$(ls "$directory/_LAST/out/merged_haplotagged_bam/$sample_dir/"*GRCh38.haplotagged.bam)
 		ln -sf "../../merged_haplotagged_bam_index/1/$(basename "$mother_bam").bai" "$(dirname "$mother_bam")/$(basename "$mother_bam").bai"
-		#mother_bam_bai=$(ls "$directory/_LAST/out/merged_haplotagged_bam_index/$sample_dir/"*GRCh38.haplotagged.bam.bai)
 		mother_bam_bai=$mother_bam.bai
 	elif [[ "$sample_dir" == "2" ]]; then
 		father_bam=$(ls "$directory/_LAST/out/merged_haplotagged_bam/$sample_dir/"*GRCh38.haplotagged.bam)
 		ln -sf "../../merged_haplotagged_bam_index/2/$(basename "$father_bam").bai" "$(dirname "$father_bam")/$(basename "$father_bam").bai"
-		#father_bam_bai=$(ls "$directory/_LAST/out/merged_haplotagged_bam_index/$sample_dir/"*GRCh38.haplotagged.bam.bai)
 		father_bam_bai=$father_bam.bai
 	else
 		echo "Role unknown at $sample : $sample_dir"
@@ -345,30 +361,33 @@ if [ -z "$father_bam" ]; then
 else
 	mode="trio"
 fi
-echo "Mode set to: $mode"
+echo "Mode set to: $mode" >>$report_file
 
 
 proband_name=$(cat "$samplesheet" | grep  '"sample_id": ' | cut -d'"' -f4 | head -n 1)
+echo "Proband name: $proband_name" >>$report_file
 mother_name=$(cat "$samplesheet" | grep  '"sample_id": ' | cut -d'"' -f4 | sed '2q;d')
+echo "Mother name: $mother_name" >>$report_file
 if [ "$mode" == "duo" ]; then father_name="null"
 else father_name=$(cat "$samplesheet" | grep  '"sample_id": ' | cut -d'"' -f4 | sed '3q;d')
+	echo "Father name: $father_name" >>$report_file
 fi
-echo Family ID: $family_id
-proband_small_variant=$(ls "$directory/_LAST/out/phased_small_variant_vcf/0/$proband_name.$family_id.joint.GRCh38.small_variants.phased.vcf.gz")
-proband_TRGT=$(ls "$directory"/_LAST/out/phased_trgt_vcf/0/$proband_name.GRCh38.trgt.sorted.phased.vcf.gz)
-proband_SV=$(ls "$directory"/_LAST/out/phased_sv_vcf/0/$proband_name.$family_id.joint.GRCh38.structural_variants.phased.vcf.gz)
-mother_small_variant=$(ls "$directory/_LAST/out/phased_small_variant_vcf/1/$mother_name.$family_id.joint.GRCh38.small_variants.phased.vcf.gz")
-mother_TRGT=$(ls "$directory"/_LAST/out/phased_trgt_vcf/1/$mother_name.GRCh38.trgt.sorted.phased.vcf.gz)
-mother_SV=$(ls "$directory"/_LAST/out/phased_sv_vcf/1/$mother_name.$family_id.joint.GRCh38.structural_variants.phased.vcf.gz)
+
+proband_small_variant=$(ls $directory/_LAST/out/phased_small_variant_vcf/0/$proband_name.$family_id.joint.*.vcf.gz)
+proband_TRGT=$(ls $directory/_LAST/out/phased_trgt_vcf/0/$proband_name.*.vcf.gz)
+proband_SV=$(ls $directory/_LAST/out/phased_sv_vcf/0/$proband_name.$family_id.joint.*.vcf.gz)
+mother_small_variant=$(ls $directory/_LAST/out/phased_small_variant_vcf/1/$mother_name.$family_id.joint.*.vcf.gz)
+mother_TRGT=$(ls $directory/_LAST/out/phased_trgt_vcf/1/$mother_name.*.vcf.gz)
+mother_SV=$(ls $directory/_LAST/out/phased_sv_vcf/1/$mother_name.$family_id.joint.*.vcf.gz)
 
 if [ "$mode" == "duo" ]; then
 	father_small_variant="null"
 	father_TRGT="null"
 	father_SV="null"
 else
-	father_small_variant=$(ls "$directory/_LAST/out/phased_small_variant_vcf/2/$father_name.$family_id.joint.GRCh38.small_variants.phased.vcf.gz")
-	father_TRGT=$(ls "$directory"/_LAST/out/phased_trgt_vcf/2/$father_name.GRCh38.trgt.sorted.phased.vcf.gz)
-	father_SV=$(ls "$directory"/_LAST/out/phased_sv_vcf/2/$father_name.$family_id.joint.GRCh38.structural_variants.phased.vcf.gz)
+	father_small_variant=$(ls $directory/_LAST/out/phased_small_variant_vcf/2/$father_name.$family_id.joint.*.vcf.gz)
+	father_TRGT=$(ls $directory/_LAST/out/phased_trgt_vcf/2/$father_name.*.vcf.gz)
+	father_SV=$(ls $directory/_LAST/out/phased_sv_vcf/2/$father_name.$family_id.joint.*.vcf.gz)
 fi
 
 #We normalize the small variant vcfs before sending them to GeneYX
@@ -409,22 +428,22 @@ if [ "$real_gender" = "null" ] && [ "$inferred_gender" = "null" ];then
 	final_gender=""
 else
 	if [ "$real_gender" = "$inferred_gender" ];then
-		echo "Proband Gender confirmed to be $real_gender"
+		echo "Proband Gender confirmed to be $real_gender" >> $report_file
 		final_gender=$(echo $real_gender | cut -c1-1)
 	elif [ "$real_gender" = "null" ];then
-		echo "Using inferred gender: $inferred_gender"
+		echo "Real gender was null, using inferred gender: $inferred_gender" >> $report_file
 		final_gender=$(echo "$inferred_gender" | cut -c1-1)
 	elif [ "$inferred_gender" = "null" ];then
-		echo "Using given gender: $real_gender"
+		echo "Inferred gender was null, using given gender: $real_gender" >> $report_file
 		final_gender=$(echo "$real_gender" | cut -c1-1)
 	else
-		echo "Warning: Given gender ($real_gender) does not fit inferred gender ($inferred_gender)."
+		echo "Warning: Given gender ($real_gender) does not fit inferred gender ($inferred_gender)." >> $report_file
 		final_gender=$(echo "$real_gender" | cut -c1-1)
 		genderError=true
 	fi
 fi
 
-if [ "$genderError" == "true" ]; then exit
+if [ "$genderError" == "true" ]; then exit 1
 fi
 
 
@@ -459,20 +478,23 @@ if [ "$send_to_geneyx" == true ] || [ "$run_all" == true ]; then
 	if [ "$mode" == "duo" ]; then echo "Skipping father, duo mode"
 	else buildSamplefiles "$father_name" "$(basename "$father_unified_vcf")" "$(basename "$father_normalized_SNV")" "M" "False"
 	fi
-	echo "done building samplesheets"
 	#Remove comma from last line
 	ed -s $directory/modifiedGeneYXTrio$family_id.json <<< '$-'$((n-1))$',$s/},/}/g\nwq'
 	printf "\t]\n}" >>$directory/modifiedGeneYXTrio$family_id.json
-	cat $directory/modifiedGeneYXTrio$family_id.json
+	echo JSON file for GeneYX upload built: $directory/modifiedGeneYXTrio$family_id.json >> "$report_file"
+	cat $directory/modifiedGeneYXTrio$family_id.json >> "$report_file"
 	cd $directory
-	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/JSON_Sample_Upload.py --jsonFile $directory/modifiedGeneYXTrio$family_id.json -c $my_config
+	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/JSON_Sample_Upload.py \
+		--jsonFile $directory/modifiedGeneYXTrio$family_id.json \
+		-c $my_config 2>> "$report_file" 2>&1
+	echo "Sample upload to GeneYX done......................" >> "$report_file"
 fi
 
 #Send Case to GeneYX step
 if [ "$send_case_to_geneyx" == true ] || [ "$run_all" == true ]; then
 	loadEnv "GeneYX_env"
 	my_config=$(geneYXConfig)
-	hpoTerms=$(cat "$samplesheet" | grep 'phenotypes": ' | cut -d'"' -f4)
+	hpoTerms=$(jq -r '.["humanwgs_family.phenotypes"]' "$(dirname $output_file)/inputs.json")
 	if [ "$mode" == "duo" ]; then
 		fatherDesc=""
 		fatherString=""
@@ -481,7 +503,7 @@ if [ "$send_case_to_geneyx" == true ] || [ "$run_all" == true ]; then
 		fatherString=",
 				{
 				\"Relation\": \"Father\",
-				\"SampleId\": \"$father_name\",
+				\"SampleId\": \"${father_name}_${family_id}\",
 				\"Affected\": \"Unaffected\"
 				}"
 	fi
@@ -492,21 +514,25 @@ if [ "$send_case_to_geneyx" == true ] || [ "$run_all" == true ]; then
 		"ProtocolId": "LR_Trio",
 		"Name": "${proband_name}_${mode}_${family_id}",
 		"Description": "$mode analysis for FamilyID: $family_id, composed of proband: $proband_name, mother: $mother_name $fatherDesc",
-		"SubjectId": "$proband_name",
+		"SubjectId": "${proband_name}_${family_id}",
 		"Phenotypes": "$hpoTerms",
 		"ProbandSampleId": "${proband_name}_${family_id}",
 		"AssociatedSamples": [ 
 			{
 			"Relation": "Mother",
-			"SampleId": "$mother_name",
+			"SampleId": "${mother_name}_${family_id}",
 			"Affected": "Unaffected"
 			}$fatherString
 		]
 	}
 EOF
-	cat $directory/modifiedTrioCaseUpload$family_id.json
+	echo "Case upload JSON file built: $directory/modifiedTrioCaseUpload$family_id.json" >> "$report_file"
+	cat $directory/modifiedTrioCaseUpload$family_id.json >> "$report_file"
 	cd  $directory
-	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_CreateCase.py --data $directory/modifiedTrioCaseUpload$family_id.json -c $my_config
+	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_CreateCase.py \
+		--data $directory/modifiedTrioCaseUpload$family_id.json \
+		-c $my_config 2>> "$report_file" 2>&1
+	echo "Case upload to GeneYX done......................" >> "$report_file"
 
 fi
 
@@ -515,22 +541,24 @@ if [ "$send_qc_to_geneyx" == true ] || [ "$run_all" == true ]; then
 	loadEnv "GeneYX_env"
 	my_config=$(geneYXConfig)
 	#Building the JSON file for GeneYX upload
-	echo "Retrieving QC data for proband..."
+	echo "Retrieving QC data for proband..." >> "$report_file"
 	probandQCData=$(buildQCData "$proband_name" "0" "$(basename $proband_normalized_SNV)")
-	echo "Retrieving QC data for mother..."
+	cat "$probandQCData" >> "$report_file"
+
+	echo "Retrieving QC data for mother..." >> "$report_file"
 	motherQCData=$(buildQCData "$mother_name" "1" "$(basename $mother_normalized_SNV)")
-	cat "$probandQCData"
-	cat "$motherQCData"
-	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$probandQCData" -c $my_config
-	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$motherQCData" -c $my_config
+	cat "$motherQCData" >> "$report_file"
+	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$probandQCData" -c $my_config 2>> "$report_file" 2>&1
+	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$motherQCData" -c $my_config 2>> "$report_file" 2>&1
 	if [[ $mode == "duo" ]]; then
-		echo "Skipping father, duo mode"
+		echo "Skipping father, duo mode" >> "$report_file"
 	else
-		echo "Retrieving QC data for father..."
+		echo "Retrieving QC data for father..." >> "$report_file"
 		fatherQCData=$(buildQCData "$father_name" "2" "$(basename $father_normalized_SNV)")
-		cat "$fatherQCData"
-		python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$fatherQCData" -c $my_config
+		cat "$fatherQCData" >> "$report_file"
+		python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$fatherQCData" -c $my_config 2>> "$report_file" 2>&1
 	fi
+	echo "QC data upload to GeneYX done...................." >> "$report_file"
 fi
 
 #Initializes a list of dependencies as slurm-id of sbatch jobs
@@ -539,27 +567,47 @@ dependencies=()
 echo "Launch step time"
 #SVTopo step
 if [ "$include_svtopo" == true ] || [ "$run_all" == true ]; then
-	cp $here_folder/../Tools/SVTopo/svtopo_requirements.txt $APPTAINER_CACHEDIR/
-	apptainerGet "svtopo_v0.3.0.sif" $here_folder/../Tools/SVTopo/svtopo.def
+	cp $tools_folder/SVTopo/svtopo_requirements.txt $APPTAINER_CACHEDIR/
+	apptainerGet "svtopo_v0.3.0.sif" $tools_folder/SVTopo/svtopo.def
 	supporting_reads="$directory/_LAST/out/sv_supporting_reads/${family_id}.joint.GRCh38.structural_variants.supporting_reads.json.gz"
 	
-	echo "Launching SVTopo with Scripts/svtopocall_from_image.sh"
-	dependencies+=("$(sbatch --parsable -J svtopo_${family_id}_proband -D $directory/SVTOPO_OUTPUTS $here_folder/../Tools/SVTopo/svtopocall_from_image.sh -p "$family_id-proband-${proband_name}" -b "$proband_bam" -i "$proband_bam_bai" -s "$supporting_reads" -v "$proband_SV" -r "$resource_folder" -o $directory -h $here_folder)")
-	dependencies+=("$(sbatch --parsable -J svtopo_${family_id}_mother -D $directory/SVTOPO_OUTPUTS $here_folder/../Tools/SVTopo/svtopocall_from_image.sh -p "$family_id-mother-${mother_name}" -b "$mother_bam" -i "$mother_bam_bai" -s "$supporting_reads" -v "$mother_SV" -r "$resource_folder" -o $directory -h $here_folder)")
+	echo "Launching SVTopo with Scripts/svtopocall_from_image.sh" >> "$report_file"
+	dependency_Proband="$(sbatch --parsable -J svtopo_${family_id}_proband \
+		-D $directory/SVTOPO_OUTPUTS $tools_folder/SVTopo/svtopocall_from_image.sh \
+		-p "$family_id-proband-${proband_name}" -b "$proband_bam" -i "$proband_bam_bai" \
+		-s "$supporting_reads" -v "$proband_SV" -r "$resource_folder" -o $directory -t $tools_folder)"
+	echo "Find SVTopo report for proband: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_proband.$dependency_Proband.out" >> "$report_file"
+	dependency_Mother="$(sbatch --parsable -J svtopo_${family_id}_mother \
+		-D $directory/SVTOPO_OUTPUTS $tools_folder/SVTopo/svtopocall_from_image.sh \
+		-p "$family_id-mother-${mother_name}" -b "$mother_bam" -i "$mother_bam_bai" \
+		-s "$supporting_reads" -v "$mother_SV" -r "$resource_folder" -o $directory -t $tools_folder)"
+	echo "Find SVTopo report for mother: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_mother.$dependency_Mother.out" >> "$report_file"
+	dependencies+=("$dependency_Proband" "$dependency_Mother")
 	if [ "$mode" == "trio" ]; then
-		dependencies+=("$(sbatch --parsable -J svtopo_${family_id}_father -D $directory/SVTOPO_OUTPUTS $here_folder/../Tools/SVTopo/svtopocall_from_image.sh -p "$family_id-father-${father_name}" -b "$father_bam" -i "$father_bam_bai" -s "$supporting_reads" -v "$father_SV" -r "$resource_folder" -o $directory -h $here_folder)")
+		dependency_Father="$(sbatch --parsable -J svtopo_${family_id}_father \
+			-D $directory/SVTOPO_OUTPUTS $tools_folder/SVTopo/svtopocall_from_image.sh \
+			-p "$family_id-father-${father_name}" -b "$father_bam" -i "$father_bam_bai" \
+			-s "$supporting_reads" -v "$father_SV" -r "$resource_folder" -o $directory -t $tools_folder)"
+		echo "Find SVTopo report for father: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_father.$dependency_Father.out" >> "$report_file"
+		dependencies+=("$dependency_Father")
 	fi
 fi
 
 #Triomix step
 if [ "$include_triomix" == true ] || [ "$run_all" == true ]; then
-	apptainerGet "triomix_v0.0.2.sif" "docker://cjyoon/triomix:v0.0.2"
-	cd "$directory"
-	echo "Launching Triomix"
-	mkdir -p Triomix_analyses
-	# father_line="null"
-	# if [ "$mode" == "trio" ]; then father_line="--father $father_bam" ; fi
-	dependencies+=("$(sbatch --parsable -J triomix_${family_id} -D $directory/Triomix_analyses $here_folder/../Tools/Triomix/triomixcall_from_image.sh -p "$proband_bam" -m "$mother_bam" -f "$father_bam" -r "$fasta_path" -o "$directory")")
+	if [ "$mode" == "trio" ]; then
+		apptainerGet "triomix_v0.0.2.sif" "docker://cjyoon/triomix:v0.0.2"
+		cd "$directory"
+		echo "Launching Triomix" >> "$report_file"
+		mkdir -p Triomix_analyses
+		dependency_Triomix="$(sbatch --parsable -J triomix_${family_id} \
+			-D $directory/Triomix_analyses $tools_folder/Triomix/triomixcall_from_image.sh \
+			-p "$proband_bam" -m "$mother_bam" -f "$father_bam" -r "$fasta_path" -o "$directory")"
+		echo "Find Triomix report at $directory/Triomix_analyses/J-triomix_${family_id}.$dependency_Triomix.out" >> "$report_file"
+		dependencies+=("$dependency_Triomix")
+	else
+		echo "TrioMix is meant for trio analysis, skipping for duo mode" >> "$report_file"
+	fi
 fi
 
 #Somalier step
@@ -577,75 +625,81 @@ if  [ "$run_all" == true ] || [ "$include_somalier" == true ]; then
 	
 	getPed
 	cd "$directory"
-	echo "Launching Somalier"
-	echo "bash $here_folder/../Tools/Somalier/somaliercall_from_image.sh -p "$proband_name" -m "$mother_name" -f "$father_name" -r $fasta_path -i $family_id -d "$directory""
-	dependencies+=("$(sbatch --parsable -J somalier_${family_id} -D $directory/Somalier_analyses $here_folder/../Tools/Somalier/somaliercall_from_image.sh -p "$proband_name" -m "$mother_name" -f "$father_name" -r $fasta_path -i $family_id -d "$directory" -s $here_folder/../Tools/Somalier/sites.hg38.vcf.gz)")
-	#dependencies+=("$(sbatch -J somalier_${family_id} -D Somalier_analyses somalierScript.sh)")
+	echo "Launching Somalier" >> "$report_file"
+	dependency_Somalier="$(sbatch --parsable -J somalier_${family_id} \
+		-D $directory/Somalier_analyses $tools_folder/Somalier/somaliercall_from_image.sh \
+		-p "$proband_name" -m "$mother_name" -f "$father_name" \
+		-r $fasta_path -i $family_id -d "$directory" -s $tools_folder/Somalier/sites.hg38.vcf.gz)"
+	echo "Find Somalier report at $directory/Somalier_analyses/J-somalier_${family_id}.$dependency_Somalier.out" >> "$report_file"
+	dependencies+=($dependency_Somalier)
 	cd "$here_folder"
 fi
 
 #Peddy step
 if [ "$include_peddy" == true ] || [ "$run_all" == true ]; then
-	cp $here_folder/../Tools/Peddy/peddy_requirements.txt $APPTAINER_CACHEDIR/
-	apptainerGet peddy_v0.4.8.sif $here_folder/../Tools/Peddy/peddy.def
+	cp $tools_folder/Peddy/peddy_requirements.txt $APPTAINER_CACHEDIR/
+	apptainerGet peddy_v0.4.8.sif $tools_folder/Peddy/peddy.def
 	getPed
 	cd "$directory"
-	echo "running PEDDY for merged.$family_id.normed.joint.GRCh38.small_variants.phased.merged.vcf.gz"
-	echo "bash $here_folder/../Tools/Peddy/peddycall_from_image.sh -p "$proband_name" -m "$mother_name" -f "$father_name" -i $family_id -d "$directory""
-	dependencies+=("$(sbatch --parsable -J peddy_${family_id} -D $directory/Peddy_analyses $here_folder/../Tools/Peddy/peddycall_from_image.sh -p "$proband_name" -m "$mother_name" -f "$father_name" -i $family_id -d "$directory")")
+	echo "running PEDDY for merged.$family_id.normed.joint.GRCh38.small_variants.phased.merged.vcf.gz" >> "$report_file"
+	dependency_Peddy="$(sbatch --parsable -J peddy_${family_id} \
+		-D $directory/Peddy_analyses $tools_folder/Peddy/peddycall_from_image.sh \
+		-p "$proband_name" -m "$mother_name" -f "$father_name" -i $family_id -d "$directory")"
+	echo "Find Peddy report at $directory/Peddy_analyses/J-peddy_${family_id}.$dependency_Peddy.out" >> "$report_file"
+	dependencies+=($dependency_Peddy)
 fi
 
 #MultiQC step
+final_dependencies=()
 if [ "$include_multiqc" == true ] || [ "$run_all" == true ]; then
 	cd "$directory"
 	apptainerGet multiqc_v1.3.3.sif docker://multiqc/multiqc:v1.33
-	dependencyCallLine=$(dependencyLine "${dependencies[@]}")
-	echo "dependency line: $dependencyCallLine"
-	echo "sbatch $dependencyCallLine --parsable -J multiqc_${family_id} -D $directory $here_folder/../Tools/MultiQc/multiQccall_from_image.sh"
+	dependency_Call_Line=$(dependencyLine "${dependencies[@]}")
+	echo "dependency line for multiqc: $dependency_Call_Line" >> "$report_file"
 	#I use an sbatch so we can use job dependencies and run this AFTER the other steps
-	dependencies+=("$(sbatch $dependencyCallLine --parsable -J multiqc_${family_id} -D $directory $here_folder/../Tools/MultiQc/multiQccall_from_image.sh)")
+	dependency_MultiQC=$(sbatch $dependency_Call_Line --parsable -J multiqc_${family_id} \
+		-D $directory $tools_folder/MultiQc/multiQccall_from_image.sh)
+	echo "Find MultiQC report at $directory/J-multiqc_${family_id}.$dependency_MultiQC.out" >> "$report_file"
+	final_dependencies+=("$dependency_MultiQC")
 fi
 
 #Cleanup and transfer step
 if [ "$include_cleanup" == true ] || [ "$run_all" == true ]; then
-	dependencyCallLine=$(dependencyLine "${dependencies[@]}")
-	echo "dependency line for Cleanup: $dependencyCallLine"
 	bash $here_folder/cleanup.sh -i $family_id -d $directory -c $config_file
 	bash $here_folder/outputs_Json.sh -i $family_id -d $directory -c $config_file
-	bash $here_folder/send_Symlinks_Narval.sh -i $family_id -d $directory -c $config_file -h $here_folder -r
+	bash $here_folder/send_Symlinks_Narval.sh -i $family_id -d $directory -c $config_file -r
 
 	loadEnv "Globus_env"
-	flow=6336492e-e308-4a67-b78e-13684c747472 # move and delete flow
-	destination_endpoint=$(jq -r '.Transfers.destination_endpoint' ${config_file}) # Narval endpoint UUID
-	destination_collection=":$(jq -r '.Transfers.destination_collection' ${config_file})" # Narval collection UUID
-	source_endpoint=$(jq -r '.Transfers.origin_endpoint' ${config_file})
-	source_collection=":$(jq -r '.Transfers.origin_collection' ${config_file})"
-	if [ -z $source_endpoint ] || [ -z $destination_endpoint ]; then
+	#flow=6336492e-e308-4a67-b78e-13684c747472 # move and delete flow
+	destination_endpoint="$(jq -r '.Transfers.destination_endpoint' "${config_file}")" # Narval endpoint UUID
+	destination_collection="$(jq -r '.Transfers.destination_collection' "${config_file}")" # Narval collection UUID
+	source_endpoint="$(jq -r '.Transfers.origin_endpoint' "${config_file}")"
+	source_collection="$(jq -r '.Transfers.origin_collection' "${config_file}")"
+	if [ -z "$source_endpoint" ] || [ -z "$destination_endpoint" ]; then
 		echo "Given cluster endpoint for origin or destination not found."
 		exit 1
 	fi
-	globus login --flow $flow --gcs ${destination_endpoint}${destination_collection} --gcs ${source_endpoint}${source_collection}
-	cluster=$(jq -r '.Transfers.cluster_name' ${config_file})
-	if [ "$cluster" == "Fir" ] || [ "$cluster" == "fir" ]; then
-		echo "sbatch $dependencyCallLine -J Globus_$family_id $here_folder/globus_cli_send.sh -i $family_id -d $directory -c $config_file -h $here_folder"
-		sbatch "$dependencyCallLine" -J Globus_"$family_id" "$here_folder/globus_cli_send.sh" -i "$family_id" -d "$directory" -c "$config_file" -h "$here_folder"
-	else
-		echo "Ready to send data via globus?"
-		select yn in "yes" "no"; do
-			case $yn in
-			yes)
-				echo "bash $here_folder/globus_cli_send.sh -i $family_id -d $directory -c $config_file -h $here_folder"
-				bash $here_folder/globus_cli_send.sh -i "$family_id" -d "$directory" -c "$config_file" -h "$here_folder"
-				break
-				;;
-			no)
-				break
-				;;
-			*)
-				echo "please select 1 or 2"
-				;;
-			esac
-		done
-			fi
-	exit 0
+	globus login --gcs ${destination_endpoint}:${destination_collection} --gcs ${source_endpoint}:${source_collection}
+	# cluster=$(jq -r '.Transfers.cluster_name' "${config_file}")
+	# if [ "$cluster" == "Fir" ] || [ "$cluster" == "fir" ]; then
+	# 	echo "sbatch $final_job_line -J Globus_$family_id $here_folder/globus_cli_send.sh -i $family_id -d $directory -c $config_file -h $here_folder"
+	# 	sbatch "$final_job_line" -J Globus_$family_id "$here_folder/globus_cli_send.sh" -i "$family_id" -d "$directory" -c "$config_file" -h "$here_folder"
+	# 	exit 0
+	# else
+
+	#If ready to send, we can append to the final list (used for updating BAMs to the correct sample)
+	echo "$proband_name,$family_id/proband/${proband_name}_$family_id" >>"$here_folder/geneYXNameList.txt"
+	echo "$mother_name,$family_id/mother/${mother_name}_$family_id" >>"$here_folder/geneYXNameList.txt"
+	echo "$father_name,$family_id/father/${father_name}_$family_id" >>"$here_folder/geneYXNameList.txt"
+	destination_path="$(jq -r '.Transfers.destination_path' $config_file)"
+	#echo "globus transfer --label $family_id-transfer -r "${source_collection}:$directory" "${destination_collection}:${destination_path}/$family_id""
+	
+	#globus transfer --label $family_id-transfer -r "${source_collection}:$directory" "${destination_collection}:${destination_path}/$family_id"
+
+	#Normally, as long as we launch after multiqc (and cleanup), every step should have been done
+	final_dependency_line=$(dependencyLine "${final_dependencies[@]}")
+	echo "dependency line for Cleanup: $final_dependency_line"
+	sbatch $final_dependency_line -D $directory -J final_globus_${family_id} "$here_folder/globus_cli_send.sh" -i "$family_id" -d "$directory" -c "$config_file" -t "$tools_folder"
+
 fi
+	exit 0

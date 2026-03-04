@@ -7,8 +7,6 @@
 # This script is meant to use globus to send a fully processed folder
 # This will ignore symlinks 
 
-# On Narval the default destination the path is:
-destination_path="$HOME/projects/ctb-rallard/COMMUN/PacBioData/OutputFamilies"
 
 
 set -eu
@@ -16,10 +14,10 @@ echo "Arguments:"
 for var in "$@"; do
  echo $var
 done
-usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>] [-h <here_folder>]" 1>&2; exit 1; }
+usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>] [-t <tools_folder>] " 1>&2; exit 1; }
 config_file="$(dirname $0)/../.myconf.json"
 
-while getopts ":i:d:c:h:" o; do
+while getopts ":i:d:c:t:r:" o; do
 	case "${o}" in
 		i)
 			family_id=${OPTARG}
@@ -31,11 +29,12 @@ while getopts ":i:d:c:h:" o; do
 				exit
 			fi
 			;;
+		t)
+			#This should be in the repo, directory containing the globus environment and requirements
+			tools_folder=${OPTARG}
+			;;
 		c)
 			config_file=${OPTARG}
-			;;
-		h)
-			here_folder=${OPTARG}
 			;;
 		*)
 			usage
@@ -51,8 +50,69 @@ if [ ! -f "$config_file" ]; then
 	echo "Could not find config file $config_file"
 	exit
 fi
-echo "here folder: $here_folder/../Tools/Globus_env"
-ENVDIR=$here_folder/../Tools/Globus_env
+# We start with a check of the steps that should have been done already
+ok_to_send=true
+summary_file="$directory/summary_report.txt"
+echo "Step review for $family_id" > "$summary_file"
+if [ -f "$directory/Peddy_analyses/${family_id}_peddy.html" ]; then
+	echo "Peddy report found" >> "$summary_file"
+else
+	echo "Peddy report NOT FOUND" >> "$summary_file"
+	ok_to_send=false
+fi
+
+if [ -d "$directory/SVTOPO_OUTPUTS" ]; then
+	for d in "$directory"/SVTOPO_OUTPUTS/*/; do
+		if [ -d "$d" ]; then # Check if it's a directory
+			if [ ! -f "${d}index.html" ]; then
+				echo "SVTOPO report NOT FOUND in ${d}" >> "$summary_file"
+				ok_to_send=false
+			else echo "SVTOPO report found in ${d}" >> "$summary_file"
+			fi
+		fi
+	done
+else
+	echo "SVTOPO_OUTPUTS directory not found" >> "$summary_file"
+	ok_to_send=false
+fi
+
+
+if [ -d "$directory/Triomix_analyses" ]; then
+	if ls "$directory"/Triomix_analyses/*.child.counts.plot.pdf 1> /dev/null 2>&1; then
+		echo "Triomix report found" >> "$summary_file"
+	else
+		echo "Triomix report NOT FOUND" >> "$summary_file"
+		ok_to_send=false
+	fi
+else
+	echo "Triomix_analyses directory not found" >> "$summary_file"
+	ok_to_send=false
+fi
+
+
+if [ -f "$directory/multiqc_report.html" ]; then
+	echo "MultiQC report found" >> "$summary_file"
+else
+	echo "MultiQC report NOT FOUND" >> "$summary_file"
+	ok_to_send=false
+fi
+
+
+if [ "$ok_to_send" = false ]; then
+	echo "Not sending to Narval, some steps are missing. Please check the summary report at $summary_file"
+	exit
+else echo "Attempting to send Transfer request to globus"
+fi
+
+# On Narval the default destination the path is:
+destination_path="$(jq -r '.Transfers.destination_path' $config_file)"
+destination_endpoint="$(jq -r '.Transfers.destination_endpoint' "${config_file}")" # Narval endpoint UUID
+destination_collection="$(jq -r '.Transfers.destination_collection' "${config_file}")" # Narval collection UUID
+source_endpoint="$(jq -r '.Transfers.origin_endpoint' "${config_file}")"
+source_collection="$(jq -r '.Transfers.origin_collection' "${config_file}")"
+
+echo "here folder: $tools_folder/Globus_env"
+ENVDIR=$tools_folder/Globus_env
 if [ -d "$ENVDIR" ]; then
 	echo "using existing Globus environment at $ENVDIR"
 	source $ENVDIR/bin/activate
@@ -61,24 +121,25 @@ else
 	source $ENVDIR/bin/activate
 	pip install --no-index --upgrade pip
 	echo "Loading Globus environment"
-	pip install -r $here_folder/../Tools/requirementsGlobus.txt
+	pip install -r $tools_folder/requirementsGlobus.txt
 fi
+globus transfer --label $family_id-transfer -r "${source_collection}:$directory" "${destination_collection}:${destination_path}/$family_id"
 
-cat << EOF > globusFlow_$family_id.json
-{
-	"source": {
-		"id": "$(jq -r '.Transfers.origin_collection' $config_file)",
-		"path": "$directory/"
-	},
-	"destination": {
-		"id": "$(jq -r '.Transfers.destination_collection' $config_file)",
-		"path": "$destination_path/$family_id/"
-	},
-	"transfer_label": "Transfer $family_id to Narval",
-	"verify_checksum": true
-}
-EOF
-cat globusFlow_$family_id.json
-move_flow=6336492e-e308-4a67-b78e-13684c747472 ##UUID of the move and delete flow
-globus flows start --input file:globusFlow_$family_id.json $move_flow 
-rm globusFlow_$family_id.json
+# cat << EOF > globusFlow_$family_id.json
+# {
+# 	"source": {
+# 		"id": "$(jq -r '.Transfers.origin_collection' $config_file)",
+# 		"path": "$directory/"
+# 	},
+# 	"destination": {
+# 		"id": "$(jq -r '.Transfers.destination_collection' $config_file)",
+# 		"path": "$destination_path/$family_id/"
+# 	},
+# 	"transfer_label": "Transfer $family_id to Narval",
+# 	"verify_checksum": true
+# }
+# EOF
+# cat globusFlow_$family_id.json
+# move_flow=6336492e-e308-4a67-b78e-13684c747472 ##UUID of the move and delete flow
+# globus flows start --input file:globusFlow_$family_id.json $move_flow 
+# rm globusFlow_$family_id.json
