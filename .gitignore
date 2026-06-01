@@ -3,6 +3,7 @@ groupReassign.json
 Postanalysis/*.txt
 validation_merged_list.tsv
 .myconf.json
+.myGeneYXConf.yml
 mySampleList.txt
 *.pyc
 testSingleSamples.csv

@@ -1,0 +1,6 @@
+certifi==2025.10.5+computecanada
+charset_normalizer==3.4.4+computecanada
+idna==3.11+computecanada
+PyYAML==6.0.2+computecanada
+requests==2.32.5+computecanada
+urllib3==2.5.0+computecanada

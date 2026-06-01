@@ -1,0 +1,12 @@
+certifi==2025.11.12
+charset_normalizer==3.4.4+computecanada
+configurator==3.2.0
+idna==3.11+computecanada
+numpy==2.3.3+computecanada
+pandas==2.3.3+computecanada
+python_dateutil==2.9.0.post0+computecanada
+pytz==2025.2+computecanada
+requests==2.32.5+computecanada
+six==1.17.0+computecanada
+tzdata==2025.2+computecanada
+urllib3==2.6.2

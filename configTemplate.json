@@ -24,6 +24,18 @@
 			"sample_sheet_path": "/home/felixant/scratch/MINIWDL/SampleSheet/",
 			"output_path": "/home/felixant/scratch/MINIWDL/Outputs",
 			"tertiary_maps": "/home/felixant/scratch/MINIWDL/HiFi-human-WGS-WDL/GRCh38.tertiary_map.v2p0p0.tsv",
-			"miniwdl_cfg": "/home/felixant/scratch/MINIWDL/miniwdl.cfg"
+			"miniwdl_cfg": "/home/felixant/scratch/MINIWDL/miniwdl.cfg",
+			"s3_folder": "/home/felixant/links/scratch/S3-Storage"
+		},
+	"Transfers":
+		{
+			"origin_cluster": "Fir",
+			"origin_endpoint": "Globus UUID",
+			"origin_collection": "Globus UUID",
+			"identity_file": "/home/felixant/.ssh/FirInteractive",
+			"destination_cluster": "Narval",
+			"destination_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/OutputFamilies/",
+			"destination_endpoint": "Globus UUID",
+			"destination_collection": "Globus UUID"
 		}
 }

@@ -1,0 +1,16 @@
+certifi==2025.11.12+computecanada
+cffi==1.17.1+computecanada
+charset_normalizer==3.4.4+computecanada
+click==8.3.1+computecanada
+configurator==3.2.0
+cryptography==45.0.6+computecanada
+globus-cli==3.40.0
+globus-sdk==4.1.0
+idna==3.11+computecanada
+jmespath==1.0.1+computecanada
+packaging==25.0+computecanada
+pycparser==2.23+computecanada
+PyJWT==2.10.1+computecanada
+requests==2.32.5+computecanada
+urllib3==2.6.2+computecanada
+
