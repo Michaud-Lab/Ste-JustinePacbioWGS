@@ -1,15 +1,13 @@
 Bootstrap: docker
 From: python:3.11-slim
 
-%files
-	$APPTAINER_CACHEDIR/peddy_requirements.txt /app/peddy_requirements.txt
 %post
 	apt-get update && apt-get install git -y && apt-get clean autoclean \
 		&& apt-get install -y wget
 	python -m venv /app/venv
 	cd /app
 	git clone https://github.com/brentp/peddy
-	/app/venv/bin/pip install --no-index --upgrade pip
+	/app/venv/bin/pip install --upgrade pip
 	/app/venv/bin/pip install --no-cache-dir -r peddy/requirements.txt
 	/app/venv/bin/pip install --editable peddy/.
 %environment

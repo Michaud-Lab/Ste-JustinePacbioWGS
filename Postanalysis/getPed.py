@@ -45,12 +45,17 @@ def main():
 	else:
 		fatherID = ""
 		fatherLine = ""
-	motherID = sampleSheet['samples'][0]['mother_id']
-
+	if "mother_id" in sampleSheet['samples'][0].keys():	
+		motherID = sampleSheet['samples'][0]['mother_id']
+		motherLine = f"""
+{trioName}\t{motherID}\t\t\t2\t1"""
+	else:
+		motherID = ""
+		motherLine = ""
+# Tabs in order: FamilyID, SampleID, PaternalID, MaternalID, Sex, Phenotype
 	with open(f"{trioName}.ped",'w') as pedFile:
 		pedFile.write(
-f"""{trioName}\t{probandID}\t{fatherID}\t{motherID}\t{probandCode}\t2
-{trioName}\t{motherID}\t\t\t2\t1{fatherLine}
+f"""{trioName}\t{probandID}\t{fatherID}\t{motherID}\t{probandCode}\t2{motherLine}{fatherLine}
 """)
 	print(f"{trioName}.ped")
 

@@ -16,8 +16,8 @@ for var in "$@"; do
 done
 usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>] [-t <tools_folder>] " 1>&2; exit 1; }
 config_file="$(dirname $0)/../.myconf.json"
-
-while getopts ":i:d:c:t:r:" o; do
+tools_folder="$(dirname $0)/../Tools/"
+while getopts ":i:d:c:t:" o; do
 	case "${o}" in
 		i)
 			family_id=${OPTARG}
@@ -85,8 +85,16 @@ if [ -d "$directory/Triomix_analyses" ]; then
 		ok_to_send=false
 	fi
 else
-	echo "Triomix_analyses directory not found" >> "$summary_file"
-	ok_to_send=false
+	
+	# Quick check to see if case is not trio, triomix is only needed on those
+	module load bcftools
+	num_samples=$(bcftools query -l $directory/$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz | wc -l)
+	if [ $num_samples == "3" ]; then
+		echo "Triomix_analyses directory not found and family is trio" >> "$summary_file"
+		ok_to_send=false
+	else
+		echo "Mode is not trio so no Triomix is ok"
+	fi
 fi
 
 

@@ -8,8 +8,8 @@
 #Arguments:
 # $-i <familyID>
 # $-p <proband_name>
-# $-m <mother_name>
-# $-f <father_name>
+# $-1 <parent_1_name>
+# $-2 <parent_2_name>
 # $-d <input_directory>
 
 #It's not normally necessary to run in a sbatch, but for some reason,
@@ -23,18 +23,18 @@ for var in "$@"; do
  echo $var
 done
 
-usage() { echo "Usage: $0 [-i <familyID>] [-p <proband_name>] [-m <mother_name>] [-f <father_name>]" 1>&2; exit 1; }
-
-while getopts ":p:m:f:i:d:" o; do
+usage() { echo "Usage: $0 [-i <familyID>] [-p <proband_name>] [-1 <parent_1_name>] [-2 <parent_2_name>] [-d <input_directory>]" 1>&2; exit 1; }
+parent_2_name=""
+while getopts ":p:1:2:i:d:" o; do
     case "${o}" in
         p)
             proband_name=${OPTARG}
             ;;
-        m)
-            mother_name=${OPTARG}
+        1)
+            parent_1_name=${OPTARG}
             ;;
-        f)
-            father_name=${OPTARG}
+        2)
+            parent_2_name=${OPTARG}
             ;;
         i)
 			family_id=${OPTARG}
@@ -47,26 +47,25 @@ while getopts ":p:m:f:i:d:" o; do
             ;;
     esac
 done
-if [ -z "${proband_name:-}" ] || [ -z "${mother_name:-}" ] || [ -z "${family_id:-}" ]; then
+if [ -z "${proband_name:-}" ] || [ -z "${parent_1_name:-}" ] || [ -z "${family_id:-}" ]; then
 	usage
 fi
 here_folder=$(realpath $(dirname $0))
 
-# #Setup the images
-# if [ -z $APPTAINER_CACHEDIR ]; then
-#     echo """Warning: You should set an explicit directory for APPTAINER_CACHEDIR in ~/.bashrc IE:
-#     export APPTAINER_TMPDIR="~/scratch/singularity_cache/tmp"
-#     export APPTAINER_CACHEDIR="/home/felixant/scratch/singularity_cache"
-# """
-#     echo "Using script folder for now"
-#     export APPTAINER_CACHEDIR="$here_folder/apptainer_cache"
-#     mkdir -p $APPTAINER_CACHEDIR
-# fi
-
-image=$APPTAINER_CACHEDIR/peddy_v0.4.8.sif
-if [ ! -f $image ]; then
+# Setup the images
+if [ -z ${APPTAINER_CACHEDIR:-} ]; then
+    echo """Warning: You should set an explicit directory for APPTAINER_CACHEDIR in ~/.bashrc IE:
+    export APPTAINER_TMPDIR="~/scratch/singularity_cache/tmp"
+    export APPTAINER_CACHEDIR="/home/felixant/scratch/singularity_cache"
+"""
+    echo "Using scratch folder as APPTAINER_CACHEDIR for now"
+    export APPTAINER_CACHEDIR="$SCRATCH/apptainer_cache"
+    mkdir -p "$APPTAINER_CACHEDIR"
+fi
+image="$APPTAINER_CACHEDIR/peddy_v0.4.8.sif"
+if [ ! -f "$image" ]; then
 	echo "Building Peddy apptainer image"
-	apptainer build $image $here_folder/peddy.def
+	apptainer build "$image" "$here_folder/peddy.def"
 fi
 
 
@@ -86,10 +85,10 @@ function index_vcf() {
 }
 
 index_vcf "$proband_name"
-index_vcf "$mother_name"
-if [ ! -z "$father_name" ]; then
-	index_vcf "$father_name"
-fi	
+index_vcf "$parent_1_name"
+if [ "$parent_2_name" != "null" ] && [ "$parent_2_name" != "" ]; then
+	index_vcf "$parent_2_name"
+fi
 
 
 here_folder=$(realpath $(dirname $0))
@@ -97,19 +96,19 @@ here_folder=$(realpath $(dirname $0))
 #We start with a normalized vcf separated for each individual, we just need to merge it again
 if [ ! -f "$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz" ]; then
 		echo "Merging normed VCFs"
-		if [ ! -z "$father_name" ]; then
-			if [ ! -f "$father_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz.tbi" ]; then
-				tabix -p vcf "$father_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz"
+		if [ "$parent_2_name" != "null" ] && [ "$parent_2_name" != "" ]; then
+			if [ ! -f "$parent_2_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz.tbi" ]; then
+				tabix -p vcf "$parent_2_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz"
 			fi 
 			bcftools merge \
 				"$proband_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
-				"$mother_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
-				"$father_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
+				"$parent_1_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
+				"$parent_2_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
 				-o "$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz" -O z
 		else #duo
 			bcftools merge \
 				"$proband_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
-				"$mother_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
+				"$parent_1_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
 				-o "$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz" -O z
 
 		fi

@@ -20,7 +20,7 @@ set -eo pipefail
 module load python/3.11 htslib/1.22.1 bcftools/1.22 bedtools/2.31.0 apptainer/1.3.5 arrow/21.0.0 libyaml
 
 usage() { 
-	printf "Usage: \n $0 [-i <familyID>]  [-g <group (i.e. prag, decode)>] \n
+	printf "Usage: \n $0 [-i <familyID>]  [-g <group (i.e. prag,decode,valid /p,d,v)>] \n
  [-s {to run every step, otherwise will enter interactive mode}] \n
  [-c <Optional_config_file>] \n" 
  1>&2; exit 1; }
@@ -37,16 +37,20 @@ while getopts "i:c:g:s" o; do
 			;;
 		g)
 			group=${OPTARG}
-			if [ "$group" == "Pragmatiq" ] || [ "$group" == "prag" ] ; then
-				echo "Using Pragmatiq group, if decodeur specify second argument 'd'"
+			if [ "$group" == "Pragmatiq" ] || [ "$group" == "prag" ] || [ "$group" == "p" ]; then
+				echo "Using Pragmatiq group"
 				group_name="Pragmatiq"
 				group_code="prag"
-			elif [ "$group" == "Decodeur" ] || [ "$group" == "decode" ]; then
-				echo "Using Decodeur group, if pragmatiq specify second argument 'p'"
+			elif [ "$group" == "Decodeur" ] || [ "$group" == "decode" ] || [ "$group" == "d" ]; then
+				echo "Using Decodeur group"
 				group_name="Decodeur"
 				group_code="decode"
+			elif [ "$group" == "Validation" ] || [ "$group" == "valid" ] || [ "$group" == "v" ]; then
+				echo "Using Validation group"
+				group_name="Validation"
+				group_code="validation"
 			else 
-				echo "Use either 'Pragmatiq' or 'Decodeur' for group name or their code 'prag' or 'decode'"
+				echo "Use either 'Pragmatiq' or 'Decodeur' or 'Validation' for group name or their code 'prag' or 'decode', 'valid' or 'p','d' or 'v'"
 				exit
 			fi
 			;;
@@ -163,7 +167,7 @@ function buildSamplefiles() {
 		"snvVcf": "$3",
 		"svVcf": "$2",
 		"genomeBuild": "hg38",
-		"patientId": "${1}_$family_id",
+		"patientId": "${1}",
 		"SampleTarget": "WholeGenomeLR",
 		"sampleQcData": "QCData/${family_id}_${1}_QC_new.json",
 		"patientGender": "$4",
@@ -192,7 +196,8 @@ function dependencyLine() {
 		local dependencyCallLine=""
 	else
 		local dependencyCallLine="-d afterok:"
-		IFS=":" dependencyCallLine+="${dependencies[*]}"
+		local IFS=":"
+		dependencyCallLine+="${dependencies[*]}"
 	fi
 	echo "$dependencyCallLine"
 }
@@ -265,7 +270,7 @@ function buildQCData() {
 	>$SCRATCH/QCData/${family_id}_${1}_QC_new.json
 	cat << EOF >>"$SCRATCH/QCData/${family_id}_${1}_QC_new.json"
 	{
-		"sampleSn": "$(basename "${1}_${family_id}")",
+		"sampleSn": "$(basename "${1}")",
 		"PassedReadsNum": $bam_reads,
 		"FailedReadsNum": $failed_reads,
 		"MappedReadsNum": $map_reads,
@@ -343,20 +348,20 @@ for sample in $directory/_LAST/out/merged_haplotagged_bam/*/;do
 		proband_bam_bai=$proband_bam.bai
 
 	elif [[ "$sample_dir" == "1" ]]; then
-		mother_bam=$(ls "$directory/_LAST/out/merged_haplotagged_bam/$sample_dir/"*GRCh38.haplotagged.bam)
-		ln -sf "../../merged_haplotagged_bam_index/1/$(basename "$mother_bam").bai" "$(dirname "$mother_bam")/$(basename "$mother_bam").bai"
-		mother_bam_bai=$mother_bam.bai
+		first_parent_bam=$(ls "$directory/_LAST/out/merged_haplotagged_bam/$sample_dir/"*GRCh38.haplotagged.bam)
+		ln -sf "../../merged_haplotagged_bam_index/1/$(basename "$first_parent_bam").bai" "$(dirname "$first_parent_bam")/$(basename "$first_parent_bam").bai"
+		first_parent_bam_bai=$first_parent_bam.bai
 	elif [[ "$sample_dir" == "2" ]]; then
-		father_bam=$(ls "$directory/_LAST/out/merged_haplotagged_bam/$sample_dir/"*GRCh38.haplotagged.bam)
-		ln -sf "../../merged_haplotagged_bam_index/2/$(basename "$father_bam").bai" "$(dirname "$father_bam")/$(basename "$father_bam").bai"
-		father_bam_bai=$father_bam.bai
+		second_parent_bam=$(ls "$directory/_LAST/out/merged_haplotagged_bam/$sample_dir/"*GRCh38.haplotagged.bam)
+		ln -sf "../../merged_haplotagged_bam_index/2/$(basename "$second_parent_bam").bai" "$(dirname "$second_parent_bam")/$(basename "$second_parent_bam").bai"
+		second_parent_bam_bai=$second_parent_bam.bai
 	else
 		echo "Role unknown at $sample : $sample_dir"
 		exit
 	fi 
 done
 
-if [ -z "$father_bam" ]; then
+if [ -z "$second_parent_bam" ]; then
 	mode="duo"
 else
 	mode="trio"
@@ -366,60 +371,88 @@ echo "Mode set to: $mode" >>$report_file
 
 proband_name=$(cat "$samplesheet" | grep  '"sample_id": ' | cut -d'"' -f4 | head -n 1)
 echo "Proband name: $proband_name" >>$report_file
-mother_name=$(cat "$samplesheet" | grep  '"sample_id": ' | cut -d'"' -f4 | sed '2q;d')
-echo "Mother name: $mother_name" >>$report_file
-if [ "$mode" == "duo" ]; then father_name="null"
-else father_name=$(cat "$samplesheet" | grep  '"sample_id": ' | cut -d'"' -f4 | sed '3q;d')
-	echo "Father name: $father_name" >>$report_file
+first_parent_name=$(cat "$samplesheet" | grep  '"sample_id": ' | cut -d'"' -f4 | sed '2q;d')
+echo "First parent name: $first_parent_name" >>$report_file
+if [ "$mode" == "duo" ]; then second_parent_name="null"
+else second_parent_name=$(cat "$samplesheet" | grep  '"sample_id": ' | cut -d'"' -f4 | sed '3q;d')
+	echo "second_parent name: $second_parent_name" >>$report_file
 fi
 
+# Variant paths
 proband_small_variant=$(ls $directory/_LAST/out/phased_small_variant_vcf/0/$proband_name.$family_id.joint.*.vcf.gz)
 proband_TRGT=$(ls $directory/_LAST/out/phased_trgt_vcf/0/$proband_name.*.vcf.gz)
 proband_SV=$(ls $directory/_LAST/out/phased_sv_vcf/0/$proband_name.$family_id.joint.*.vcf.gz)
-mother_small_variant=$(ls $directory/_LAST/out/phased_small_variant_vcf/1/$mother_name.$family_id.joint.*.vcf.gz)
-mother_TRGT=$(ls $directory/_LAST/out/phased_trgt_vcf/1/$mother_name.*.vcf.gz)
-mother_SV=$(ls $directory/_LAST/out/phased_sv_vcf/1/$mother_name.$family_id.joint.*.vcf.gz)
+first_parent_small_variant=$(ls $directory/_LAST/out/phased_small_variant_vcf/1/$first_parent_name.$family_id.joint.*.vcf.gz)
+first_parent_TRGT=$(ls $directory/_LAST/out/phased_trgt_vcf/1/$first_parent_name.*.vcf.gz)
+first_parent_SV=$(ls $directory/_LAST/out/phased_sv_vcf/1/$first_parent_name.$family_id.joint.*.vcf.gz)
 
 if [ "$mode" == "duo" ]; then
-	father_small_variant="null"
-	father_TRGT="null"
-	father_SV="null"
+	second_parent_small_variant="null"
+	second_parent_TRGT="null"
+	second_parent_SV="null"
 else
-	father_small_variant=$(ls $directory/_LAST/out/phased_small_variant_vcf/2/$father_name.$family_id.joint.*.vcf.gz)
-	father_TRGT=$(ls $directory/_LAST/out/phased_trgt_vcf/2/$father_name.*.vcf.gz)
-	father_SV=$(ls $directory/_LAST/out/phased_sv_vcf/2/$father_name.$family_id.joint.*.vcf.gz)
+	second_parent_small_variant=$(ls $directory/_LAST/out/phased_small_variant_vcf/2/$second_parent_name.$family_id.joint.*.vcf.gz)
+	second_parent_TRGT=$(ls $directory/_LAST/out/phased_trgt_vcf/2/$second_parent_name.*.vcf.gz)
+	second_parent_SV=$(ls $directory/_LAST/out/phased_sv_vcf/2/$second_parent_name.$family_id.joint.*.vcf.gz)
 fi
 
 #We normalize the small variant vcfs before sending them to GeneYX
 echo "Normalizing variants"
 proband_normalized_SNV=$(Normalize "$proband_name" "$proband_small_variant")
-mother_normalized_SNV=$(Normalize "$mother_name" "$mother_small_variant")
-if [ "$mode" == "duo" ]; then father_normalized_SNV="null"
-else father_normalized_SNV=$(Normalize "$father_name" "$father_small_variant")
+first_parent_normalized_SNV=$(Normalize "$first_parent_name" "$first_parent_small_variant")
+if [ "$mode" == "duo" ]; then second_parent_normalized_SNV="null"
+else second_parent_normalized_SNV=$(Normalize "$second_parent_name" "$second_parent_small_variant")
 fi
 
 #Unify the 4 different VCFs into one for each sample
 echo "Unifying variants"
 proband_unified_vcf=$(UnifyVCF "$proband_name" "$proband_TRGT" "$proband_SV")
-mother_unified_vcf=$(UnifyVCF "$mother_name" "$mother_TRGT" "$mother_SV")
-if [ "$mode" == "duo" ]; then father_unified_vcf="null"
-else father_unified_vcf=$(UnifyVCF "$father_name" "$father_TRGT" "$father_SV")
+first_parent_unified_vcf=$(UnifyVCF "$first_parent_name" "$first_parent_TRGT" "$first_parent_SV")
+if [ "$mode" == "duo" ]; then second_parent_unified_vcf="null"
+else second_parent_unified_vcf=$(UnifyVCF "$second_parent_name" "$second_parent_TRGT" "$second_parent_SV")
 fi
 
-#Gender
+# ===== Gender Check =====
+# Proband
 real_gender=$(grep -m1 '"sex": ' "$samplesheet" | cut -d'"' -f4)
-#mosdepthfile=$(grep 'hifi_reads.bc' "$samplesheet" | sed "${index}q;d" | cut -d'"' -f2)
 inferred_gender=$(grep -A 3 humanwgs_family.inferred_sex $output_file | sed "2q;d" | cut -d\" -f2)
-mother_inferred_gender=$(grep -A 3 humanwgs_family.inferred_sex $output_file | sed "3q;d" | cut -d\" -f2)
-father_inferred_gender=$(grep -A 3 humanwgs_family.inferred_sex $output_file | sed "4q;d" | cut -d\" -f2)
+
+# Check the first parent (usually the mother)
+first_parent_real_gender=$(grep -m2 '"sex": ' "$samplesheet" | sed -n '2p' | cut -d'"' -f4)
+first_parent_inferred_gender=$(grep -A 3 humanwgs_family.inferred_sex $output_file | sed "3q;d" | cut -d\" -f2)
+if [ "$first_parent_real_gender" == "FEMALE" ]; then
+	first_parent_role="Mother"
+elif [ "$first_parent_real_gender" == "MALE" ]; then
+	first_parent_role="Father"
+else
+	echo "Warning: First parent's given gender is not recognized: $first_parent_real_gender"
+	exit 1
+fi
+
+# If present, check the second parent (usually the father)
+if [ "$mode" == "trio" ]; then
+	second_parent_real_gender=$(grep -m3 '"sex": ' "$samplesheet" | sed -n '3p' | cut -d'"' -f4)
+	second_parent_inferred_gender=$(grep -A 3 humanwgs_family.inferred_sex $output_file | sed "4q;d" | cut -d\" -f2)
+
+	if [ "$second_parent_real_gender" == "MALE" ]; then
+		second_parent_role="Father"
+	elif [ "$second_parent_real_gender" == "FEMALE" ]; then
+		second_parent_role="Mother"
+	else
+		echo "Warning: Second parent's given gender is not recognized: $second_parent_real_gender"
+		exit 1
+	fi
+fi
+
+# Check specifically for errors in assigned and inferred genders
 genderError=false
-if [ "$mother_inferred_gender" != "FEMALE" ]; then
-	echo "Warning: Mother's inferred gender is not female: $mother_inferred_gender"
+if [ "$first_parent_inferred_gender" != "$first_parent_real_gender" ]; then
+	echo "Warning: First parent's (Of assigned role $first_parent_role) inferred gender is not $first_parent_real_gender:  Got $first_parent_inferred_gender"
 	genderError=true
 fi
 
-if [ "$father_inferred_gender" != "MALE" ]; then
-	echo "Warning: Father's inferred gender is not male: $father_inferred_gender"
+if [ "$second_parent_inferred_gender" != "$second_parent_real_gender" ]; then
+	echo "Warning: Second parent's (Of assigned role $second_parent_role) inferred gender is not $second_parent_real_gender:  Got $second_parent_inferred_gender"
 	genderError=true
 fi
 
@@ -443,7 +476,12 @@ else
 	fi
 fi
 
-if [ "$genderError" == "true" ]; then exit 1
+if [ "$mode" == "trio" ] && [ "$second_parent_role" == "$first_parent_role" ]; then
+	echo "Warning: Both parents have the same assigned role of $first_parent_role"
+	genderError=true
+fi
+
+if [ "$genderError" == "true" ]; then echo "Found gender error, Exiting"; exit 1
 fi
 
 
@@ -474,12 +512,12 @@ if [ "$send_to_geneyx" == true ] || [ "$run_all" == true ]; then
 
 	#Heredocs for iterative file building
 	buildSamplefiles "$proband_name" "$(basename "$proband_unified_vcf")" "$(basename "$proband_normalized_SNV")" "$final_gender" "True"
-	buildSamplefiles "$mother_name" "$(basename "$mother_unified_vcf")" "$(basename "$mother_normalized_SNV")" "F" "False"
-	if [ "$mode" == "duo" ]; then echo "Skipping father, duo mode"
-	else buildSamplefiles "$father_name" "$(basename "$father_unified_vcf")" "$(basename "$father_normalized_SNV")" "M" "False"
+	buildSamplefiles "$first_parent_name" "$(basename "$first_parent_unified_vcf")" "$(basename "$first_parent_normalized_SNV")" "F" "False"
+	if [ "$mode" == "duo" ]; then echo "Skipping second_parent, duo mode"
+	else buildSamplefiles "$second_parent_name" "$(basename "$second_parent_unified_vcf")" "$(basename "$second_parent_normalized_SNV")" "M" "False"
 	fi
 	#Remove comma from last line
-	ed -s $directory/modifiedGeneYXTrio$family_id.json <<< '$-'$((n-1))$',$s/},/}/g\nwq'
+	sed -i '$ s/},/}/' "$directory/modifiedGeneYXTrio$family_id.json"
 	printf "\t]\n}" >>$directory/modifiedGeneYXTrio$family_id.json
 	echo JSON file for GeneYX upload built: $directory/modifiedGeneYXTrio$family_id.json >> "$report_file"
 	cat $directory/modifiedGeneYXTrio$family_id.json >> "$report_file"
@@ -496,14 +534,14 @@ if [ "$send_case_to_geneyx" == true ] || [ "$run_all" == true ]; then
 	my_config=$(geneYXConfig)
 	hpoTerms=$(jq -r '.["humanwgs_family.phenotypes"]' "$(dirname $output_file)/inputs.json")
 	if [ "$mode" == "duo" ]; then
-		fatherDesc=""
-		fatherString=""
+		second_parentDesc=""
+		second_parentString=""
 	else
-		fatherDesc="and Father: $father_name"
-		fatherString=",
+		second_parentDesc="and $second_parent_role: $second_parent_name"
+		second_parentString=",
 				{
-				\"Relation\": \"Father\",
-				\"SampleId\": \"${father_name}_${family_id}\",
+				\"Relation\": \"$second_parent_role\",
+				\"SampleId\": \"${second_parent_name}\",
 				\"Affected\": \"Unaffected\"
 				}"
 	fi
@@ -513,16 +551,16 @@ if [ "$send_case_to_geneyx" == true ] || [ "$run_all" == true ]; then
 	{
 		"ProtocolId": "LR_Trio",
 		"Name": "${proband_name}_${mode}_${family_id}",
-		"Description": "$mode analysis for FamilyID: $family_id, composed of proband: $proband_name, mother: $mother_name $fatherDesc",
-		"SubjectId": "${proband_name}_${family_id}",
+		"Description": "$mode analysis for FamilyID: $family_id, composed of proband: $proband_name, $first_parent_role: $first_parent_name $second_parentDesc",
+		"SubjectId": "${proband_name}",
 		"Phenotypes": "$hpoTerms",
-		"ProbandSampleId": "${proband_name}_${family_id}",
+		"ProbandSampleId": "${proband_name}",
 		"AssociatedSamples": [ 
 			{
-			"Relation": "Mother",
-			"SampleId": "${mother_name}_${family_id}",
+			"Relation": "$first_parent_role",
+			"SampleId": "$first_parent_name",
 			"Affected": "Unaffected"
-			}$fatherString
+			}$second_parentString
 		]
 	}
 EOF
@@ -545,18 +583,18 @@ if [ "$send_qc_to_geneyx" == true ] || [ "$run_all" == true ]; then
 	probandQCData=$(buildQCData "$proband_name" "0" "$(basename $proband_normalized_SNV)")
 	cat "$probandQCData" >> "$report_file"
 
-	echo "Retrieving QC data for mother..." >> "$report_file"
-	motherQCData=$(buildQCData "$mother_name" "1" "$(basename $mother_normalized_SNV)")
-	cat "$motherQCData" >> "$report_file"
+	echo "Retrieving QC data for $first_parent_role..." >> "$report_file"
+	first_parentQCData=$(buildQCData "$first_parent_name" "1" "$(basename $first_parent_normalized_SNV)")
+	cat "$first_parentQCData" >> "$report_file"
 	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$probandQCData" -c $my_config 2>> "$report_file" 2>&1
-	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$motherQCData" -c $my_config 2>> "$report_file" 2>&1
+	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$first_parentQCData" -c $my_config 2>> "$report_file" 2>&1
 	if [[ $mode == "duo" ]]; then
-		echo "Skipping father, duo mode" >> "$report_file"
+		echo "Skipping second_parent, duo mode" >> "$report_file"
 	else
-		echo "Retrieving QC data for father..." >> "$report_file"
-		fatherQCData=$(buildQCData "$father_name" "2" "$(basename $father_normalized_SNV)")
-		cat "$fatherQCData" >> "$report_file"
-		python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$fatherQCData" -c $my_config 2>> "$report_file" 2>&1
+		echo "Retrieving QC data for second_parent..." >> "$report_file"
+		second_parentQCData=$(buildQCData "$second_parent_name" "2" "$(basename $second_parent_normalized_SNV)")
+		cat "$second_parentQCData" >> "$report_file"
+		python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$second_parentQCData" -c $my_config 2>> "$report_file" 2>&1
 	fi
 	echo "QC data upload to GeneYX done...................." >> "$report_file"
 fi
@@ -577,19 +615,19 @@ if [ "$include_svtopo" == true ] || [ "$run_all" == true ]; then
 		-p "$family_id-proband-${proband_name}" -b "$proband_bam" -i "$proband_bam_bai" \
 		-s "$supporting_reads" -v "$proband_SV" -r "$resource_folder" -o $directory -t $tools_folder)"
 	echo "Find SVTopo report for proband: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_proband.$dependency_Proband.out" >> "$report_file"
-	dependency_Mother="$(sbatch --parsable -J svtopo_${family_id}_mother \
+	dependency_first_parent="$(sbatch --parsable -J svtopo_${family_id}_$first_parent_role \
 		-D $directory/SVTOPO_OUTPUTS $tools_folder/SVTopo/svtopocall_from_image.sh \
-		-p "$family_id-mother-${mother_name}" -b "$mother_bam" -i "$mother_bam_bai" \
-		-s "$supporting_reads" -v "$mother_SV" -r "$resource_folder" -o $directory -t $tools_folder)"
-	echo "Find SVTopo report for mother: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_mother.$dependency_Mother.out" >> "$report_file"
-	dependencies+=("$dependency_Proband" "$dependency_Mother")
+		-p "$family_id-$first_parent_role-${first_parent_name}" -b "$first_parent_bam" -i "$first_parent_bam_bai" \
+		-s "$supporting_reads" -v "$first_parent_SV" -r "$resource_folder" -o $directory -t $tools_folder)"
+	echo "Find SVTopo report for $first_parent_role: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_$first_parent_role.$dependency_first_parent.out" >> "$report_file"
+	dependencies+=("$dependency_Proband" "$dependency_first_parent")
 	if [ "$mode" == "trio" ]; then
-		dependency_Father="$(sbatch --parsable -J svtopo_${family_id}_father \
+		dependency_second_parent="$(sbatch --parsable -J svtopo_${family_id}_$second_parent_role \
 			-D $directory/SVTOPO_OUTPUTS $tools_folder/SVTopo/svtopocall_from_image.sh \
-			-p "$family_id-father-${father_name}" -b "$father_bam" -i "$father_bam_bai" \
-			-s "$supporting_reads" -v "$father_SV" -r "$resource_folder" -o $directory -t $tools_folder)"
-		echo "Find SVTopo report for father: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_father.$dependency_Father.out" >> "$report_file"
-		dependencies+=("$dependency_Father")
+			-p "$family_id-$second_parent_role-${second_parent_name}" -b "$second_parent_bam" -i "$second_parent_bam_bai" \
+			-s "$supporting_reads" -v "$second_parent_SV" -r "$resource_folder" -o $directory -t $tools_folder)"
+		echo "Find SVTopo report for $second_parent_role: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_$second_parent_role.$dependency_second_parent.out" >> "$report_file"
+		dependencies+=("$dependency_second_parent")
 	fi
 fi
 
@@ -602,7 +640,7 @@ if [ "$include_triomix" == true ] || [ "$run_all" == true ]; then
 		mkdir -p Triomix_analyses
 		dependency_Triomix="$(sbatch --parsable -J triomix_${family_id} \
 			-D $directory/Triomix_analyses $tools_folder/Triomix/triomixcall_from_image.sh \
-			-p "$proband_bam" -m "$mother_bam" -f "$father_bam" -r "$fasta_path" -o "$directory")"
+			-p "$proband_bam" -m "$first_parent_bam" -f "$second_parent_bam" -r "$fasta_path" -o "$directory")"
 		echo "Find Triomix report at $directory/Triomix_analyses/J-triomix_${family_id}.$dependency_Triomix.out" >> "$report_file"
 		dependencies+=("$dependency_Triomix")
 	else
@@ -628,7 +666,7 @@ if  [ "$run_all" == true ] || [ "$include_somalier" == true ]; then
 	echo "Launching Somalier" >> "$report_file"
 	dependency_Somalier="$(sbatch --parsable -J somalier_${family_id} \
 		-D $directory/Somalier_analyses $tools_folder/Somalier/somaliercall_from_image.sh \
-		-p "$proband_name" -m "$mother_name" -f "$father_name" \
+		-p "$proband_name" -1 "$first_parent_name" -2 "$second_parent_name" \
 		-r $fasta_path -i $family_id -d "$directory" -s $tools_folder/Somalier/sites.hg38.vcf.gz)"
 	echo "Find Somalier report at $directory/Somalier_analyses/J-somalier_${family_id}.$dependency_Somalier.out" >> "$report_file"
 	dependencies+=($dependency_Somalier)
@@ -644,7 +682,7 @@ if [ "$include_peddy" == true ] || [ "$run_all" == true ]; then
 	echo "running PEDDY for merged.$family_id.normed.joint.GRCh38.small_variants.phased.merged.vcf.gz" >> "$report_file"
 	dependency_Peddy="$(sbatch --parsable -J peddy_${family_id} \
 		-D $directory/Peddy_analyses $tools_folder/Peddy/peddycall_from_image.sh \
-		-p "$proband_name" -m "$mother_name" -f "$father_name" -i $family_id -d "$directory")"
+		-p "$proband_name" -1 "$first_parent_name" -2 "$second_parent_name" -i $family_id -d "$directory")"
 	echo "Find Peddy report at $directory/Peddy_analyses/J-peddy_${family_id}.$dependency_Peddy.out" >> "$report_file"
 	dependencies+=($dependency_Peddy)
 fi
@@ -688,9 +726,9 @@ if [ "$include_cleanup" == true ] || [ "$run_all" == true ]; then
 	# else
 
 	#If ready to send, we can append to the final list (used for updating BAMs to the correct sample)
-	echo "$proband_name,$family_id/proband/${proband_name}_$family_id" >>"$here_folder/geneYXNameList.txt"
-	echo "$mother_name,$family_id/mother/${mother_name}_$family_id" >>"$here_folder/geneYXNameList.txt"
-	echo "$father_name,$family_id/father/${father_name}_$family_id" >>"$here_folder/geneYXNameList.txt"
+	echo "$proband_name,$family_id/proband/${proband_name}" >>"$here_folder/geneYXNameList.txt"
+	echo "$first_parent_name,$family_id/${first_parent_role,,}/${first_parent_name}" >>"$here_folder/geneYXNameList.txt"
+	echo "$second_parent_name,$family_id/${second_parent_role,,}/${second_parent_name}" >>"$here_folder/geneYXNameList.txt"
 	destination_path="$(jq -r '.Transfers.destination_path' $config_file)"
 	#echo "globus transfer --label $family_id-transfer -r "${source_collection}:$directory" "${destination_collection}:${destination_path}/$family_id""
 	

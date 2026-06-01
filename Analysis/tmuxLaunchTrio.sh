@@ -5,7 +5,6 @@
 #Still uses a samplesheet in format:
 
 set -euo pipefail
-#!/bin/bash
 
 usage() { echo "Usage: $0 [-i <ID>] [-c <Optional_config_file>]" 1>&2; exit 1; }
 config_file=".myconf.json"

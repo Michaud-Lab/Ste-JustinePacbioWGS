@@ -33,14 +33,8 @@ while getopts ":p:m:f:r:o:" o; do
             mother_bam=${OPTARG}
             ;;
         f)
-            #Will be blank in case of duo
-			if [ "${OPTARG}" == "" ]; then
-				father_bam=""
-				father_line=""
-			else
-				father_bam=${OPTARG}
-				father_line="--father ${father_bam}"
-			fi
+            # Father is necessary for triomix, it does not work for duos
+			father_bam=${OPTARG}
             ;;
         r)
             fasta_path=${OPTARG}
@@ -55,7 +49,7 @@ while getopts ":p:m:f:r:o:" o; do
     esac
 done
 
-if [ -z "${proband_bam:-}" ] || [ -z "${mother_bam:-}" ] || [ -z "${fasta_path:-}" ] || [ -z "${directory:-}" ]; then
+if [ -z "${proband_bam:-}" ] || [ -z "${mother_bam:-}" ] || [ -z "${father_bam:-}" ] || [ -z "${fasta_path:-}" ] || [ -z "${directory:-}" ]; then
     usage
 fi
 
@@ -100,7 +94,7 @@ echo "apptainer exec -C -W $SLURM_TMPDIR -B $SLURM_TMPDIR -B $HOME \
 apptainer exec -C -W $SLURM_TMPDIR -B $SLURM_TMPDIR -B $HOME \
 	$SLURM_TMPDIR/$(basename $image) \
 	python3 /tools/triomix/triomix.py \
-	$father_line \
+	--father $SLURM_TMPDIR/$(basename $father_bam) \
 	--mother $SLURM_TMPDIR/$(basename $mother_bam) \
 	--child $SLURM_TMPDIR/$(basename $proband_bam) \
 	--reference $SLURM_TMPDIR/$(basename $fasta_path) \

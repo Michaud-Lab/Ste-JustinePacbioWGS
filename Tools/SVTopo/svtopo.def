@@ -14,7 +14,7 @@ From: python:3.11-slim
 	mv svtopo-v0.3.0-x86_64-unknown-linux-gnu/svtopo /app/venv/bin/
 	rm svtopo-v0.3.0-x86_64-unknown-linux-gnu.tar.gz
 	git clone --branch v0.3.0 https://github.com/PacificBiosciences/SVTopo.git
-	/app/venv/bin/pip install --no-index --upgrade pip
+	/app/venv/bin/pip install --upgrade pip
 	/app/venv/bin/pip install --no-cache-dir -r svtopo_requirements.txt
 	wget -O "SVTopo/cnv.excluded_regions.hg38.bed.gz" https://github.com/PacificBiosciences/HiFiCNV/raw/refs/heads/main/data/excluded_regions/cnv.excluded_regions.hg38.bed.gz
 	

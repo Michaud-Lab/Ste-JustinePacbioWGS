@@ -8,8 +8,8 @@
 #Arguments:
 # $-i <familyID>
 # $-p <proband_name>
-# $-m <mother_name>
-# $-f <father_name>
+# $-1 <parent_1_name>
+# $-2 <parent_2_name>
 # $-r <fasta_path>
 # $-d <input_directory>
 
@@ -23,19 +23,19 @@ echo "Arguments:"
 for var in "$@"; do
  echo $var
 done
-usage() { echo "Usage: $0 [-i <familyID>] [-p <proband_name>] [-m <mother_name>] [-f <father_name>] [-r <fasta_path>] [-s <sites.hg38.vcf.gz>]" 1>&2; exit 1; }
+usage() { echo "Usage: $0 [-i <familyID>] [-p <proband_name>] [-1 <parent_1_name>] [-2 <parent_2_name> (optional)] [-r <fasta_path>] [-s <sites.hg38.vcf.gz>]" 1>&2; exit 1; }
 sites_vcf="$APPTAINER_CACHEDIR/sites.hg38.vcf.gz"
-
-while getopts ":p:m:f:i:r:d:s:" o; do
+parent_2_name=""
+while getopts ":p:1:2:i:r:d:s:" o; do
     case "${o}" in
         p)
             proband_name=${OPTARG}
             ;;
-        m)
-            mother_name=${OPTARG}
+        1)
+            parent_1_name=${OPTARG}
             ;;
-        f)
-            father_name=${OPTARG}
+        2)
+            parent_2_name=${OPTARG}
             ;;
         i)
 			family_id=${OPTARG}
@@ -55,19 +55,19 @@ while getopts ":p:m:f:i:r:d:s:" o; do
     esac
 done
 
-if [ -z "${proband_name:-}" ] || [ -z "${mother_name:-}" ] || [ -z "${family_id:-}" ] || [ -z "${fasta_path:-}" ]; then
+if [ -z "${proband_name:-}" ] || [ -z "${parent_1_name:-}" ] || [ -z "${family_id:-}" ] || [ -z "${fasta_path:-}" ]; then
 	usage
 fi
 
 # #There is a 1-kg tar to extract to use this command, this won't work on Narval or Rorqual
 # On these clusters, you need to download these from a login node, or from the postprocess1.sh script
-if [ -z $APPTAINER_CACHEDIR ]; then
+if [ -z ${APPTAINER_CACHEDIR:-} ]; then
     echo """Warning: You should set an explicit directory for APPTAINER_CACHEDIR in ~/.bashrc IE:
     export APPTAINER_TMPDIR="~/scratch/singularity_cache/tmp"
     export APPTAINER_CACHEDIR="/home/felixant/scratch/singularity_cache"
 """
-    echo "Using script folder for now"
-    export APPTAINER_CACHEDIR="$here_folder/apptainer_cache"
+    echo "Using scratch folder for now"
+    export APPTAINER_CACHEDIR="$SCRATCH/apptainer_cache"
     mkdir -p $APPTAINER_CACHEDIR
 fi
 if [ ! -f "$APPTAINER_CACHEDIR/1kg.somalier.tar.gz" ]; then
@@ -119,11 +119,11 @@ echo "Running Somalier extract on:"
 echo $proband_name
 
 apptainer_extract "$proband_name" "$sites_vcf"
-echo $mother_name
-apptainer_extract "$mother_name" "$sites_vcf"
-if [ ! -z "$father_name" ]; then
-	echo $father_name
-	apptainer_extract "$father_name" "$sites_vcf"
+echo $parent_1_name
+apptainer_extract "$parent_1_name" "$sites_vcf"
+if [ "$parent_2_name" != "null" ] && [ "$parent_2_name" != "" ]; then
+	echo $parent_2_name
+	apptainer_extract "$parent_2_name" "$sites_vcf"
 fi
 
 echo "Running Somalier relate"
