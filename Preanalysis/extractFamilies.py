@@ -8,12 +8,11 @@ Reads Feuil1 (samples) and Familles (existing families), then:
    - "Volet LR PRAG -" / "prag"			→ Trio expected; require proband
    - "Volet LR PRAG - duo" / "prag duo"	→ Duo expected; require proband
    - "Decodeur"							 → Trio or Duo; require proband
-   - "Validation PacBio +" / "Validation"  → Singleton proband only; parents
+   - "Validation PacBio +" / "Validation"  → We treat them as trio if possible; parents
 											 referencing these probands are skipped
    - "Contrôle parents" / "ControleParent"
 	 / "Controle parent"				   → parent rows only; attached to
-											  their proband's family (if proband
-											  is non-singleton etude)
+											  their proband's family
    - "Not on sharepoint"				   → treat as Singleton proband
    - Any other non-empty etude			 → include if has proband, warn
 4. Families MUST have a proband. Members whose proband is not in the dataset
@@ -148,17 +147,6 @@ def extract_families(df_feuil, df_fam):
 
 		proband_row   = probands[pb_id]
 		proband_etude = str(proband_row.get("_etude_cat", "")).strip()
-
-		# if proband_etude == "singleton":
-		#	 for p in parent_of.get(pb_id, []):
-		#		 skipped_unrecognised.append((
-		#			 p["PatientID"],
-		#			 p.get("Role", ""),
-		#			 p.get("etude", ""),
-		#			 f"proband '{pb_id}' has singleton etude — parent excluded",
-		#		 ))
-		#	 members = [proband_row]
-		# else:
 		members = [proband_row] + parent_of.get(pb_id, [])
 
 		n = len(members)
