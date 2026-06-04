@@ -1,0 +1,166 @@
+# Changelog
+ 
+All notable changes to this project will be documented in this file.
+ 
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+ 
+---
+ 
+## [Unreleased]
+ 
+---
+
+## [1.0.0] - 2026-06-04
+
+### Added
+- License and changelog to the project. Tag v1.0.0
+
+## 2026-06-04
+ 
+### Added
+- `extractFamilies.py` script in Preanalysis: reads the Bioinfo Excel list and infers new families, outputting `Familles_updated.tsv`
+- Requirements file to accompany `extractFamilies.py`
+### Changed
+- Minor comment updates across scripts
+---
+ 
+## 2026-06-01
+ 
+### Changed
+- Postprocessing pipeline: integrated Copilot's review comments
+- Added support for proband-father duos in the postprocessing pipeline
+---
+ 
+## 2026-03-04
+ 
+### Changed
+- Final changes to make postanalysis scripts fully functional
+- Added tools and images for postanalysis
+---
+ 
+## 2026-01-09
+ 
+### Changed
+- Further integration changes for Rorqual HPC environment
+---
+ 
+## 2025-12-29
+ 
+### Changed
+- Separated the Globus send step into its own script, independent from the symlink script
+- Refactored Globus transfers to use automatic flows
+---
+ 
+## 2025-12-17
+ 
+### Fixed
+- Hotfix for Globus requirements
+### Changed
+- Completed the cleanup-and-send file step
+- Applied fixes to MultiQC integration
+---
+ 
+## 2025-12-11
+ 
+### Added
+- MultiQC integration and associated dependencies
+---
+ 
+## 2025-12-09
+ 
+### Fixed
+- Corrected config line
+### Added
+- Analysis folder with tmux launch script (PR #9)
+---
+ 
+## 2025-12-04
+ 
+### Added
+- First version of the bash post-processing pipeline (Part 1):
+  - VCF normalization
+  - GeneYX samplesheet generation and API submission
+  - SVTopo for structural variant visualization
+  - TrioMix for UPD and chimerism detection
+  - PEDDY for familial relation and gender validation
+  - Somalier for same-purpose validation
+---
+ 
+## 2025-10-27
+ 
+### Added
+- Analysis folder with tmux launch script for running the pipeline
+- `miniwdl_cfg` config parameter (miniwdl installation instructions pending)
+---
+ 
+## 2025-10-23
+ 
+### Added
+- `getStudy.py` script: takes a line-separated list of sample identifiers and a Pragmatiq list CSV from SharePoint, and prints the cohort for each sample ID (PR #7)
+### Fixed
+- Bug fix for Decodeur sample handling in `getSamples.py`
+### Changed
+- Samplesheet updated for PacBio WGS v3.1: added fail BAM support for the tandem repeat calling step (PR #8)
+---
+ 
+## 2025-09-16
+ 
+### Removed
+- Removed pre-aligned BAMs from the repository (Rorqual refactor, PR #6)
+---
+ 
+## 2025-07-10
+ 
+### Fixed
+- Gender field now recognized case-insensitively (uppercase/mixed-case support)
+- Removed stale samplesheet list file
+---
+ 
+## 2025-06-12
+ 
+### Added
+- Postprocessing Nextflow submodule added to the project (PR #4) (work in progress)
+### Changed
+- Cleaned up unused imports
+---
+
+## 2025-05-29
+ 
+### Added
+- Postanalysis structure and initial scripts (PR #3):
+  - `GeneYX` object class (work in progress)
+  - `sendSamplesToGeneYX.py` (partial): unifies SV, CNV, and TR VCFs for a given run list (work in progress)
+- Updated README with finalized Preanalysis description
+### Fixed
+- `getSamples.py` updated to handle Decodeur samples not retrievable from Emedgene/Phenotips
+- Adjusted header names in Preanalysis samplesheet scripts
+---
+ 
+## 2025-04-22
+ 
+### Changed
+- Refactored sample retrieval and samplesheet generation into separate steps (PR #2):
+  - New `getSamples.py` writes samples to `mySampleList.csv`
+  - `singletonSampleSheet` and `jointCallSampleSheet` now read from that list
+  - All functions migrated to `argparse` for cleaner CLI usage
+---
+ 
+## 2025-03-31
+ 
+### Added
+- Initial commit of Postanalysis steps: list assignment and `sendSamples` script (work in progress)
+---
+ 
+## 2025-03-06
+ 
+### Added
+- Initial Preanalysis scripts (PR #1):
+  - `Sample` and `Emedgene` classes
+  - Samplesheet generation scripts for singleton and joint-call workflows
+  - Example config file (`.myconf.json`)
+---
+ 
+## 2025-03-04
+ 
+### Added
+- Initial repository commit
