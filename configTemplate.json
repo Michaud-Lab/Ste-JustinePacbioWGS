@@ -29,9 +29,13 @@
 		},
 	"Transfers":
 		{
-			"origin_cluster": "Fir",
-			"origin_endpoint": "Globus UUID",
-			"origin_collection": "Globus UUID",
+			"source_cluster": "Fir",
+			"source_run_path": "/home/felixant/links/projects/rrg-rallard/shared/PacBioDataRorqual/SequencerData",
+			"source_endpoint": "Globus UUID",
+			"source_collection": "Globus UUID",
+			"working_cluster": "Fir",
+			"working_endpoint": "Globus UUID",
+			"working_collection": "Globus UUID",
 			"identity_file": "/home/felixant/.ssh/FirInteractive",
 			"destination_cluster": "Narval",
 			"destination_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/OutputFamilies/",

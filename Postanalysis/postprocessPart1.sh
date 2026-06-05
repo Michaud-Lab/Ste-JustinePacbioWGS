@@ -711,8 +711,8 @@ if [ "$include_cleanup" == true ] || [ "$run_all" == true ]; then
 	#flow=6336492e-e308-4a67-b78e-13684c747472 # move and delete flow
 	destination_endpoint="$(jq -r '.Transfers.destination_endpoint' "${config_file}")" # Narval endpoint UUID
 	destination_collection="$(jq -r '.Transfers.destination_collection' "${config_file}")" # Narval collection UUID
-	source_endpoint="$(jq -r '.Transfers.origin_endpoint' "${config_file}")"
-	source_collection="$(jq -r '.Transfers.origin_collection' "${config_file}")"
+	source_endpoint="$(jq -r '.Transfers.working_endpoint' "${config_file}")"
+	source_collection="$(jq -r '.Transfers.working_collection' "${config_file}")"
 	if [ -z "$source_endpoint" ] || [ -z "$destination_endpoint" ]; then
 		echo "Given cluster endpoint for origin or destination not found."
 		exit 1
