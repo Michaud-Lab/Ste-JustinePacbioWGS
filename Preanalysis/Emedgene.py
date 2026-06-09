@@ -17,10 +17,9 @@ class Emedgene:
         self.username    = configs.Emedgene.username
         self.password    = configs.Emedgene.password
         self.prag_server = configs.Emedgene.endpoint
-
-        self.pheno_auth  = configs.Phenotips.auth
-        self.pheno_secret= configs.Phenotips.secret
-        self.pheno_url   = configs.Phenotips.endpoint
+        # self.pheno_auth  = configs.Phenotips.auth
+        # self.pheno_secret= configs.Phenotips.secret
+        # self.pheno_url   = configs.Phenotips.endpoint
 
 
     def authenticate(self):
@@ -123,11 +122,37 @@ class Emedgene:
                 json.dump(json_file,fp,indent=4)
             logging.warning(f"Pheno ID could not be found in json response. See error.json")
 
+    #Phenotips is deprecated in favour of Qlin since we lost the subscription
+    # def phenotips_import_HPO_request(self,pheno_id):
+    #     """
+    #     Returns a string containing the phenotype HPO terms of a patient
+    #     - `pheno_id`: String of the Phenotips/Pragmatiq identifier ex.: P0000XXX... usually obtained from Emedgene
+    #     - Returns : str HP:00XXXXX,HP:0000XXX,...
+    #     """
+    #     url=f"{self.pheno_url}/rest/patients/{pheno_id}"
+    #     headers = {
+    #         "accept": "application/json",
+    #         "authorization": self.pheno_auth,
+    #         "X-Gene42-Secret": self.pheno_secret
+    #     }
+    #     response = requests.get(url, headers=headers)
+    #     data=response.json()
 
-    def phenotips_import_HPO_request(self,pheno_id):
+    #     #Parse the list for observed phenotypes (reject non observed ones)
+    #     hpo_list=[]
+    #     if "features" in data.keys():
+    #         for terms in data["features"]:
+    #             if terms["observed"] =='yes':
+    #                 hpo_list.append(terms["id"])
+    #     else:
+    #         logging.warning(f"Features could not be found on Phenotips for sample {pheno_id}")
+
+    #     return((",").join(hpo_list).replace('\'',""))
+
+    def qlin_import_HPO_request(self,pheno_id):
         """
         Returns a string containing the phenotype HPO terms of a patient
-        - `pheno_id`: String of the Phenotips identifier ex.: P0000XXX... usually obtained from Emedgene
+        - `pheno_id`: String of the Phenotips/Pragmatiq identifier ex.: P0000XXX... usually obtained from Emedgene
         - Returns : str HP:00XXXXX,HP:0000XXX,...
         """
         url=f"{self.pheno_url}/rest/patients/{pheno_id}"
@@ -149,4 +174,3 @@ class Emedgene:
             logging.warning(f"Features could not be found on Phenotips for sample {pheno_id}")
 
         return((",").join(hpo_list).replace('\'',""))
-

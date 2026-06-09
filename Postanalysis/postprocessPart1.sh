@@ -680,6 +680,7 @@ if [ "$include_peddy" == true ] || [ "$run_all" == true ]; then
 	getPed
 	cd "$directory"
 	echo "running PEDDY for merged.$family_id.normed.joint.GRCh38.small_variants.phased.merged.vcf.gz" >> "$report_file"
+
 	dependency_Peddy="$(sbatch --parsable -J peddy_${family_id} \
 		-D $directory/Peddy_analyses $tools_folder/Peddy/peddycall_from_image.sh \
 		-p "$proband_name" -1 "$first_parent_name" -2 "$second_parent_name" -i $family_id -d "$directory")"
@@ -737,7 +738,7 @@ if [ "$include_cleanup" == true ] || [ "$run_all" == true ]; then
 	#Normally, as long as we launch after multiqc (and cleanup), every step should have been done
 	final_dependency_line=$(dependencyLine "${final_dependencies[@]}")
 	echo "dependency line for Cleanup: $final_dependency_line"
-	sbatch $final_dependency_line -D $directory -J final_globus_${family_id} "$here_folder/globus_cli_send.sh" -i "$family_id" -d "$directory" -c "$config_file" -t "$tools_folder"
+	sbatch $final_dependency_line -D $directory -J final_globus_${family_id} "$here_folder/globus_cli_send.sh" -i "$family_id" -d "$directory" -c "$config_file" -t "$tools_folder" -m $mode
 
 fi
 	exit 0

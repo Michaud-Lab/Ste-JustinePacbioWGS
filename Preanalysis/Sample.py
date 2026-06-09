@@ -62,12 +62,13 @@ class Sample:
 			emg_case_json	=	Emedgene(config_file=config_file).get_case_json(emg_case_id)
 			self.case_status =	self.find_status(emg_case_json)
 
-			#TODO: Make class for Phenotips
 			pheno_case_id	=	Emedgene(config_file=config_file).get_pheno_id(json_file=(emg_case_json))
-			if self.case_status["Affected"]:
-				self.phenotypes		=	Emedgene(config_file=config_file).phenotips_import_HPO_request(pheno_case_id)
-			else:
-				self.phenotypes		=	""
+			#I'm removing this temporarily, while Phenotips is deprecated
+			# if self.case_status["Affected"]:
+			# 	self.phenotypes		=	Emedgene(config_file=config_file).qlin_import_HPO_request(pheno_case_id)
+			# else:
+			# 	self.phenotypes		=	""
+			self.phenotypes		=	""
 		
 		#phenotype overrides if present
 		if len(HPOs) != 0:

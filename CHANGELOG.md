@@ -7,7 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
  
 ## [Unreleased]
- 
+
+## 2026-06-09
+
+### Added
+- `globus_cli_get_run.sh` script in Preanalysis: allows the selection of a family ID, or a single name or an entire run from the 'Feuil1' of the excel containing basic sample description. The script will download the selection from the newly added "source" collection and folder (usually Rorqual since it contains ou raw reads). It will download them in the "working" collection and path. Then, the script will automatically run the following steps `getSample.py` and `singletonSampleSheet.py` or `jointCallSampleSheet.py`. 
+
+### Changed
+- Added the "mode -m" argument to `globus_cli_send.sh`, used to tell if Triomix should be expected or not
+- Changed the "origin_<...>" options in "Transfer" to "working_<...>". The wording is more appropriate given we now have a preanalysis transfer where the "origin" cluster is now the "working" cluster for the purpose of the Analysis step. 
+- `getStudy.py`: Bugfix for duplicate samples and adds support for Decodeur names (start with "HSJ...")
+
+### Removed
+- Removed use of the "Phenotips" cluster in `Samples.py` and `Emedgene.py` 
+
 ---
 
 ## [1.0.0] - 2026-06-04
