@@ -22,12 +22,15 @@ This will described here in [Postanalysis](#post-analysis)
 ## Requirements
 Using the scripts here requires access to GeneYX and Emedgene. Access information and paths must be defined in the [config](#config) (by default named .myconf.json). \
 Each section usually has their own requirements.txt files in terms of venv. 
+For the Preanalysis part, the requirements are included in Tools/requirementsPreanalysis.txt, although these requirements are designed to be installed in a VENV on the Alliance Clusters specifically.
+The globus_cli_get_run.sh in Preanalysis also uses the requirementsGlobus.txt. \
+The PostAnalysis part makes use of the Tools folder for requirements as well, including requirementsGeneYXUpload.txt and requirementsGlobus.txt. \
 For example, the steps to get the requirements for the Preanalysis requirements on the Alliance:
 1-	module load python/3.11
 2-	virtualenv --no-download ENV_Preanalysis
 3-  source ENV_Preanalysis/bin/activate
 4-  pip install --no-index --upgrade pip
-5-  pip install -r Preanalysis/preanalysisRequirements.txt 
+5-  pip install -r Tools/preanalysisRequirements.txt 
 
 ### Files and directories
 My fork of the analysis pipeline is available [here](https://github.com/FelixAntoineLeSieur/HiFi-human-WGS-WDL) and includes installation instruction. \
@@ -54,12 +57,6 @@ The config file follows this format see configTemplate.json:
 			"password":"YYY",
 			"endpoint":"https://chusaintejustine.emedgene.com"
 		},
-	"Phenotips":
-		{
-			"auth":"Basic XXX",
-			"secret":"YYY",
-			"endpoint":"https://chusj.phenotips.com"
-		},
 	"GeneYX":
 		{
 			"server": "https://analysis.geneyx.com",
@@ -69,17 +66,22 @@ The config file follows this format see configTemplate.json:
 	"Paths":
 		{
 			"run_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/",
-			"ref_maps": "/home/felixant/scratch/MINIWDL/HiFi-human-WGS-WDL/GRCh38.ref_map.v2p0p0.tsv",
-			"sample_sheet_path": "/home/felixant/scratch/MINIWDL/SampleSheet/",
-			"output_path": "/home/felixant/scratch/MINIWDL/Outputs",
-			"tertiary_maps": "/home/felixant/scratch/MINIWDL/HiFi-human-WGS-WDL/GRCh38.tertiary_map.v2p0p0.tsv"
-			"s3_folder": "/home/felixant/links/scratch/S3-Storage"
+			"ref_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.ref_map.v2p0p0.tsv",
+			"sample_sheet_path": "/home/felixant/scratch/SampleSheet/",
+			"output_path": "/home/felixant/scratch/Outputs",
+			"tertiary_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.tertiary_map.v2p0p0.tsv",
+			"miniwdl_cfg": "/home/felixant/scratch/Ste-JustinePacbioWGS/Analysis",
+			"s3_folder": "/home/felixant/scratch/S3-Storage"
 		},
 	"Transfers":
 		{
-			"origin_cluster": "Fir",
-			"origin_endpoint": "Globus UUID",
-			"origin_collection": "Globus UUID",
+			"source_cluster": "Rorqual",
+			"source_run_path": "/home/felixant/links/projects/rrg-rallard/shared/PacBioDataRorqual/SequencerData",
+			"source_endpoint": "Globus UUID",
+			"source_collection": "Globus UUID",
+			"working_cluster": "Fir",
+			"working_endpoint": "Globus UUID",
+			"working_collection": "Globus UUID",
 			"identity_file": "/home/felixant/.ssh/FirInteractive",
 			"destination_cluster": "Narval",
 			"destination_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/OutputFamilies/",
@@ -89,9 +91,10 @@ The config file follows this format see configTemplate.json:
 }
 ```
 
-Where the username and password are specified for each platform and the paths to the following are described in the [previous section](#files-and-directories)
-The origin cluster is needed if we perform transfers of the processed output folder to another cluster. Usually, Narval is designed to hold the processed outputs.\
-Also, if you need to send the data elsewhere, I highly recommend that you use the automation nodes, which you will need to create a ssh key for. The private key must be included in config to make use of the automation node. \ \
+Where the username and password are specified for each platform and the paths to the following are described in the [previous section](#files-and-directories) \
+The "Transfers" part is used by the Preanalysis "globus_get_run.sh" and Postanalysis "globus_cli_send.sh". See the specific script sections for details. 
+Also, if you need to send the data elsewhere, I highly recommend that you use the automation nodes, which you will need to create a ssh key for. The private key must be included in config to make use of the automation node. \
+Alternatively, one option is to use globus, like the scripts described here. \ \
 Instructions to use the automation nodes can be found [here](https://msss365-my.sharepoint.com/:p:/g/personal/nicolas_perrot_hsj_ssss_gouv_qc_ca/IQBk4eS7U82LS7RY-GDUzAotAb5FslgG8GfcCOw3VRsNF0s?e=3xbdHn )
 
 ### Sample List
@@ -109,8 +112,17 @@ GM3XXX;2_D01;2004;r84196_YYY;Female;Duo;proband;HP:0000XXX;{path_to_bam};True
 >Some scripts will also use default values for paths, such as "mySampleList.txt" for most Pre-analysis steps
 
 ## Pre-analysis
-The goal of the pre-analysis is to obtain metadata for the samples contained in the desired run, then generate sample sheets to be used as inputs for the Analysis pipeline. \
-The normal use of this part would normally be to use getSamples.py first on a recent run not yet in mySampleList.txt, then run *either* singletonSampleSheet.py on the desired samples names that should be run in singleton, OR jointCallSampleSheet.py to establish a family analysis. The getStudy.py is only used to get a reference of a study group for a line-separated list of samples. 
+The goal of the pre-analysis is to obtain metadata for the samples contained in the desired run,choose which runs to analyze, gather the necessary files for analysis and generate sample sheets to be used as inputs for the Analysis pipeline. \
+Initial runs from the Pacbio sequencer are usually sent to Rorqual at first to be stored. As such, in the config we consider Rorqual to be the "Source" cluster. \
+On the source cluster, we can run "getSample.py" with the run name, which will automatically add all samples of this run to the [Sample List](#Sample List).
+Samples from this list are usually added to the [Bioinfo excel sheet](https://msss365.sharepoint.com/:x:/r/teams/CHUSJ-Projet_PacBio_LongRead/Documents%20partages/Bioinfo-LR_SampleData.xlsx?d=w4b851b2bbb084f239930f8eb7988ba61&csf=1&web=1&e=IpObDK).\
+The excel can also be used for the script "extractFamilies.py", where new families are inferred based on proband/parent metadata.\
+
+The analysis itself is usually done elsewhere, on the "Working" cluster (Fir). \
+Once a family has been selected for analysis, we can use the "globus_get_run.sh" to download files from the "Source" Cluster using Globus.
+After the download, the same script will run "getSamples.py" and either "singletonSampleSheet.py" or "jointCallSampleSheet.py" to generate a samplesheet for the requested samples. \
+\
+The getStudy.py is only used to get a reference of a study group for a line-separated list of samples. 
 -	**getSamples.py**
 	- *Usage*: ```python3 Preanalysis/getSamples.py -r {run_id}```  \
     - *Goal*: Use this script to fill to retrieve metadata from various sources and fill a metadata list so we don't have to retrieve that info every time. Precursor script to the samplesheet-writing scripts. \
