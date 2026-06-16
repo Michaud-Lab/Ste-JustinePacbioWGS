@@ -14,7 +14,7 @@ echo "Arguments:"
 for var in "$@"; do
  echo $var
 done
-usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>] [-t <tools_folder>] " 1>&2; exit 1; }
+usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>] [-t <tools_folder>] [-m <mode> (duo/trio)] " 1>&2; exit 1; }
 config_file="$(dirname $0)/../.myconf.json"
 tools_folder="$(dirname $0)/../Tools/"
 while getopts ":i:d:c:t:" o; do
@@ -35,6 +35,13 @@ while getopts ":i:d:c:t:" o; do
 			;;
 		c)
 			config_file=${OPTARG}
+			;;
+		m)
+			mode=${OPTARG}
+				if [ "$mode" != "duo" ] && [ "$mode" != "trio" ]; then
+					echo "Invalid mode: $mode. Must be 'duo' or 'trio'."
+					exit
+				fi
 			;;
 		*)
 			usage
@@ -77,24 +84,16 @@ else
 fi
 
 
-if [ -d "$directory/Triomix_analyses" ]; then
+if [ -d "$directory/Triomix_analyses" ] && [ "$mode" == "trio" ]; then
 	if ls "$directory"/Triomix_analyses/*.child.counts.plot.pdf 1> /dev/null 2>&1; then
 		echo "Triomix report found" >> "$summary_file"
 	else
 		echo "Triomix report NOT FOUND" >> "$summary_file"
 		ok_to_send=false
 	fi
-else
-	
-	# Quick check to see if case is not trio, triomix is only needed on those
-	module load bcftools
-	num_samples=$(bcftools query -l $directory/$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz | wc -l)
-	if [ $num_samples == "3" ]; then
-		echo "Triomix_analyses directory not found and family is trio" >> "$summary_file"
-		ok_to_send=false
-	else
-		echo "Mode is not trio so no Triomix is ok"
-	fi
+elif [ "$mode" == "trio" ]; then
+	echo "Triomix_analyses directory not found" >> "$summary_file"
+	ok_to_send=false
 fi
 
 

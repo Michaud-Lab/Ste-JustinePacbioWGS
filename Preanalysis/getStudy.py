@@ -25,6 +25,13 @@ def get_study_info(main_csv_path, specimen_list_path):
 		# Perform a left join. The order of the keys from the left frame is preserved.
 		filtered_df = pd.merge(specimens_to_find_df, df, on="Identifiant : Specimen", how="left", sort=False)
 
+		filtered_df = filtered_df.drop_duplicates(subset=["Identifiant : Specimen"], keep="last")
+		for index, row in filtered_df.iterrows():
+			# Decodeur samples start with 'HSJ'
+			
+			if row["Identifiant : Specimen"].startswith("HSJ") :	
+				filtered_df.at[index,"Cohorte"] = "Decodeur"
+
 		# Define the columns to be printed
 		columns_to_print = [
 			"Identifiant : Specimen",
