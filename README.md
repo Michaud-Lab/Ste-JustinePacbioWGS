@@ -177,7 +177,7 @@ These files are imported by the scripts above and are not meant to be called dir
 | `Preanalysis/Sample.py` | Data class representing a single sequenced sample, including BAM path, metadata and samplesheet-writing methods. |
 | `Preanalysis/Family.py` | Data class representing a family grouping, wrapping multiple Sample objects and providing joint-call samplesheet-writing logic. |
 | `Preanalysis/Emedgene.py` | API client for the Emedgene platform: resolves sample names to EMG IDs and retrieves Phenotips patient IDs and HPO terms. |
-| `Preanalysis/Qlin.py` | API client for the Qlin LIMS platform: authenticates and returns a bearer token. Requires a `Qlin` section in the config (`email`, `password`, `url`). |
+| `Preanalysis/Qlin.py` | API client for the Qlin LIMS platform: authenticates and returns a bearer token. Requires a `Qlin` section in the config (`email`, `password`, `url`)  -- **Not yet implemented: Qlin API is only usable with a VPN, not from the alliance clusters** -- |
 
 ## Analysis
 This section is about running the actual WGS pipeline using the sample sheets created in the previous section. The pipeline submodule lives in `Analysis/HiFi-human-WGS-WDL/`.
@@ -233,7 +233,7 @@ Once WGS pipeline outputs are available, the post-analysis phase uploads data to
 | Module | Purpose |
 |--------|---------|
 | `Postanalysis/GeneYX.py` | API client for GeneYX: authentication, VCF unification (`unify_vcfs`), group assignment (`group_assign`). Imported by `sendSamplesToGeneYX.py` and `assignListToGeneYXGroup.py`. |
-| `Postanalysis/sendSamplesToGeneYX.py` | Main GeneYX upload script. For each sample in the run list, locates the WGS pipeline output VCFs (small variants, structural variants, tandem repeats, CNV) in `output_path/_LAST/outputs.json`, merges them into a single unified VCF using `PacBioUnifyVcf`, and sends the case to GeneYX. Optionally assigns the uploaded samples to a study group **curently handled by postprocessPart1.sh and GeneYX submodule** |
+| `Postanalysis/sendSamplesToGeneYX.py` | Main GeneYX upload script. For each sample in the run list, locates the WGS pipeline output VCFs (small variants, structural variants, tandem repeats, CNV) in `output_path/_LAST/outputs.json`, merges them into a single unified VCF using `PacBioUnifyVcf`, and sends the case to GeneYX. Optionally assigns the uploaded samples to a study group -- **curently handled by postprocessPart1.sh and GeneYX submodule** -- |
 | `Postanalysis/getSampleListFromGeneYX.py` | Retrieves the full sample list from GeneYX and writes it to `allGeneYXSampleList.json`. **Note**: uses a hardcoded config path; intended for one-off administrative queries rather than routine use. |
 | `Postanalysis/filter_parents.py` | Single-pass filter for joint-called trio VCFs (GLNexus / DeepVariant). |
 | `Postanalysis/assignListToGeneYXGroup.py` | Assigns a list of samples to a GeneYX study group. Cross-references the provided name list against a CSV export of GeneYX's full VCF list |
