@@ -85,18 +85,18 @@ if [ "$n_modes" -gt 1 ]; then
 fi
 
 # --- Set up virtual environment ---
-function loadEnv() {
-    local ENVDIR="$tools_folder/$1"
-    local req_file="$2"
-    if [ -d "$ENVDIR" ]; then
-        source "$ENVDIR/bin/activate"
-    else
-        virtualenv --no-download "$ENVDIR"
-        source "$ENVDIR/bin/activate"
-        pip install --no-index --upgrade pip
-        pip install -r "$req_file"
-    fi
-}
+module load python/3.11
+ENVDIR="$tools_folder/ENV"
+req_file="$tools_folder/requirements.txt"
+if [ -d "$ENVDIR" ]; then
+    source "$ENVDIR/bin/activate"
+else
+    virtualenv --no-download "$ENVDIR"
+    source "$ENVDIR/bin/activate"
+    pip install --no-index --upgrade pip
+    pip install -r "$req_file"
+fi
+
 
 # --- Logging setup ---
 # All output is tee'd to a timestamped log file so long-running sessions are preserved.
@@ -121,9 +121,6 @@ source_path="$(jq -r '.Transfers.source_run_path'              "$config_file")"
 tmpfile_transfers=$(mktemp /tmp/globus_transfers_XXXXXX.txt)
 tmpfile_preanalysis=$(mktemp /tmp/globus_preanalysis_XXXXXX.tsv)
 trap 'rm -f "$tmpfile_transfers" "$tmpfile_preanalysis"' EXIT
-
-module load python/3.11
-loadEnv "ENV_Preanalysis" "$tools_folder/requirementsPreanalysis.txt"
 
 python3 - "$sample_list" "$family_id" "$run_id" "$name_id" \
           "$tmpfile_transfers" "$tmpfile_preanalysis" <<'EOF'
@@ -203,7 +200,6 @@ fi
 # --- Transfer each case via Globus, collecting task IDs ---
 echo ""
 echo "=== PHASE 1: Globus transfers ==="
-loadEnv "ENV_Globus" "$tools_folder/requirementsGlobus.txt"
 globus login --gcs "${destination_endpoint}:${destination_collection}" \
              --gcs "${source_endpoint}:${source_collection}"
 
@@ -251,7 +247,6 @@ echo "All transfers complete."
 # --- PHASE 2: Pre-analysis ---
 echo ""
 echo "=== PHASE 2: Pre-analysis ==="
-loadEnv "ENV_Preanalysis" "$tools_folder/requirementsPreanalysis.txt"
 SCRIPT_DIR="Preanalysis/"
 
 # Step 1: getSamples.py — once per unique Run
