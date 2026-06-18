@@ -5,12 +5,6 @@
 			"password":"YYY",
 			"endpoint":"https://chusaintejustine.emedgene.com"
 		},
-	"Phenotips":
-		{
-			"auth":"Basic XXX",
-			"secret":"YYY",
-			"endpoint":"https://chusj.phenotips.com"
-		},
 	"GeneYX":
 		{
 			"server": "https://analysis.geneyx.com",
@@ -20,16 +14,16 @@
 	"Paths":
 		{
 			"run_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/",
-			"ref_maps": "/home/felixant/scratch/MINIWDL/HiFi-human-WGS-WDL/GRCh38.ref_map.v2p0p0.tsv",
-			"sample_sheet_path": "/home/felixant/scratch/MINIWDL/SampleSheet/",
-			"output_path": "/home/felixant/scratch/MINIWDL/Outputs",
-			"tertiary_maps": "/home/felixant/scratch/MINIWDL/HiFi-human-WGS-WDL/GRCh38.tertiary_map.v2p0p0.tsv",
-			"miniwdl_cfg": "/home/felixant/scratch/MINIWDL/miniwdl.cfg",
-			"s3_folder": "/home/felixant/links/scratch/S3-Storage"
+			"ref_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.ref_map.v2p0p0.tsv",
+			"sample_sheet_path": "/home/felixant/scratch/SampleSheet/",
+			"output_path": "/home/felixant/scratch/Outputs",
+			"tertiary_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.tertiary_map.v2p0p0.tsv",
+			"miniwdl_cfg": "/home/felixant/scratch/Ste-JustinePacbioWGS/Analysis",
+			"s3_folder": "/home/felixant/scratch/S3-Storage"
 		},
 	"Transfers":
 		{
-			"source_cluster": "Fir",
+			"source_cluster": "Rorqual",
 			"source_run_path": "/home/felixant/links/projects/rrg-rallard/shared/PacBioDataRorqual/SequencerData",
 			"source_endpoint": "Globus UUID",
 			"source_collection": "Globus UUID",
