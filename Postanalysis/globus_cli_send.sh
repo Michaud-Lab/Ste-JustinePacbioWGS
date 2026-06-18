@@ -17,7 +17,7 @@ done
 usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>] [-t <tools_folder>] [-m <mode> (duo/trio)] " 1>&2; exit 1; }
 config_file="$(dirname $0)/../.myconf.json"
 tools_folder="$(dirname $0)/../Tools/"
-while getopts ":i:d:c:t:" o; do
+while getopts ":i:d:c:t:m:" o; do
 	case "${o}" in
 		i)
 			family_id=${OPTARG}
@@ -115,8 +115,8 @@ fi
 destination_path="$(jq -r '.Transfers.destination_path' $config_file)"
 destination_endpoint="$(jq -r '.Transfers.destination_endpoint' "${config_file}")" # Narval endpoint UUID
 destination_collection="$(jq -r '.Transfers.destination_collection' "${config_file}")" # Narval collection UUID
-source_endpoint="$(jq -r '.Transfers.origin_endpoint' "${config_file}")"
-source_collection="$(jq -r '.Transfers.origin_collection' "${config_file}")"
+source_endpoint="$(jq -r '.Transfers.working_endpoint' "${config_file}")"
+source_collection="$(jq -r '.Transfers.working_collection' "${config_file}")"
 
 echo "here folder: $tools_folder/Globus_env"
 ENVDIR=$tools_folder/Globus_env
