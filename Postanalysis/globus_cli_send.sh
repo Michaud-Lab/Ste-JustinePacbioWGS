@@ -122,6 +122,7 @@ if [ -d "$ENVDIR" ]; then
 	echo "using existing environment at $ENVDIR"
 	source $ENVDIR/bin/activate
 else
+	module load python/3.11 scipy-stack/2026a
 	virtualenv --no-download $ENVDIR
 	source $ENVDIR/bin/activate
 	pip install --no-index --upgrade pip

@@ -85,7 +85,7 @@ if [ "$n_modes" -gt 1 ]; then
 fi
 
 # --- Set up virtual environment ---
-module load python/3.11
+module load python/3.11 scipy-stack/2026a
 ENVDIR="$tools_folder/ENV"
 req_file="$tools_folder/requirements.txt"
 if [ -d "$ENVDIR" ]; then
