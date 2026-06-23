@@ -10,8 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## 2026-06-18
 
+### Added
+- `Analysis/default_miniwdl.cfg` as an example config to use for miniwdl
+
 ### Changed
-- `extractFamilies.py`: replaced positional argument parsing with `argparse` to match the style of other scripts; added `-o/--output` flag for the output directory (replaces hardcoded `/mnt/user-data/outputs/`); core logic extracted into importable `extract_families()` and `load_inputs()` functions
+- `Preanalysis/extractFamilies.py`: replaced positional argument parsing with `argparse` to match the style of other scripts; added `-o/--output` flag for the output directory (replaces hardcoded `/mnt/user-data/outputs/`); core logic extracted into importable `extract_families()` and `load_inputs()` functions
 - Consolidated `Tools/requirementsPreanalysis.txt`, `Tools/requirementsGlobus.txt`, `Tools/requirementsGeneYXUpload.txt`, and `Postanalysis/requirementsGeneYXUpload.txt` into a single `Tools/requirements.txt` (duplicates removed, highest version kept for conflicts)
 - `postprocessPart1.sh`: removed `loadEnv` function for simplicity, all requirements are loaded immediately for any step. Now always installs from `Tools/requirements.txt`
 - `globus_cli_get_run.sh` and `globus_cli_send.sh`: updated all requirements file references to `Tools/requirements.txt`
