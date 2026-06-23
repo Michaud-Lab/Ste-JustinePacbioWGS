@@ -24,7 +24,8 @@ done
 
 usage() { echo "Usage: $0  [-p <proband bam>] [-m <mother bam>] [-f <father bam>] [-r <fasta reference>] [-o <Output Dir]" 1>&2; exit 1; }
 father_line=""
-while getopts ":p:m:f:r:o:" o; do
+log_file=""
+while getopts ":p:m:f:r:o:l:" o; do
     case "${o}" in
         p)
             proband_bam=${OPTARG}
@@ -42,12 +43,17 @@ while getopts ":p:m:f:r:o:" o; do
         o)
             directory=${OPTARG}
             ;;
+        l)
+            log_file=${OPTARG}
+            ;;
         *)
 			echo "Received invalid option"
             usage
             ;;
     esac
 done
+log_step() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; [ -n "${log_file:-}" ] && echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >> "$log_file"; }
+trap 'rc=$?; [ $rc -ne 0 ] && [ -n "${log_file:-}" ] && echo "[$(date +%Y-%m-%dT%H:%M:%S)] FAILED: triomix for ${proband_bam:-?} (rc=$rc)" >> "$log_file"' EXIT
 
 if [ -z "${proband_bam:-}" ] || [ -z "${mother_bam:-}" ] || [ -z "${father_bam:-}" ] || [ -z "${fasta_path:-}" ] || [ -z "${directory:-}" ]; then
     usage
@@ -105,3 +111,4 @@ apptainer exec -C -W $SLURM_TMPDIR -B $SLURM_TMPDIR -B $HOME \
 
 mkdir -p $directory/Triomix_analyses
 cp -r $SLURM_TMPDIR/Triomix_analyses/* $directory/Triomix_analyses/
+log_step "SUCCESS: triomix for ${directory}"

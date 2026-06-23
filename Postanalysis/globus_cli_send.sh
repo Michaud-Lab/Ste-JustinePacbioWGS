@@ -15,7 +15,8 @@ done
 usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>] [-t <tools_folder>] [-m <mode> (duo/trio)] " 1>&2; exit 1; }
 config_file="$(dirname $0)/../.myconf.json"
 tools_folder="$(dirname $0)/../Tools/"
-while getopts ":i:d:c:t:m:" o; do
+log_file=""
+while getopts ":i:d:c:t:m:l:" o; do
 	case "${o}" in
 		i)
 			family_id=${OPTARG}
@@ -41,11 +42,16 @@ while getopts ":i:d:c:t:m:" o; do
 					exit
 				fi
 			;;
+		l)
+			log_file=${OPTARG}
+			;;
 		*)
 			usage
 			;;
 	esac
 done
+log_step() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; [ -n "${log_file:-}" ] && echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >> "$log_file"; }
+trap 'rc=$?; [ $rc -ne 0 ] && [ -n "${log_file:-}" ] && echo "[$(date +%Y-%m-%dT%H:%M:%S)] FAILED: globus_send for ${family_id:-?} (rc=$rc)" >> "$log_file"' EXIT
 
 if [ -z "${family_id:-}" ] || [ -z "${directory:-}" ]; then
 	usage
@@ -130,6 +136,7 @@ else
 	pip install -r "$tools_folder/requirements.txt"
 fi
 globus transfer --label $family_id-transfer -r "${source_collection}:$directory" "${destination_collection}:${destination_path}/$family_id"
+log_step "SUCCESS: globus transfer for ${family_id}"
 
 # cat << EOF > globusFlow_$family_id.json
 # {

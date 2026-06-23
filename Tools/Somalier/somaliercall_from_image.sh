@@ -26,7 +26,8 @@ done
 usage() { echo "Usage: $0 [-i <familyID>] [-p <proband_name>] [-1 <parent_1_name>] [-2 <parent_2_name> (optional)] [-r <fasta_path>] [-s <sites.hg38.vcf.gz>]" 1>&2; exit 1; }
 sites_vcf="$APPTAINER_CACHEDIR/sites.hg38.vcf.gz"
 parent_2_name=""
-while getopts ":p:1:2:i:r:d:s:" o; do
+log_file=""
+while getopts ":p:1:2:i:r:d:s:l:" o; do
     case "${o}" in
         p)
             proband_name=${OPTARG}
@@ -49,11 +50,16 @@ while getopts ":p:1:2:i:r:d:s:" o; do
         s)
             sites_vcf=${OPTARG}
             ;;
+        l)
+            log_file=${OPTARG}
+            ;;
 		*)
             usage
             ;;
     esac
 done
+log_step() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; [ -n "${log_file:-}" ] && echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >> "$log_file"; }
+trap 'rc=$?; [ $rc -ne 0 ] && [ -n "${log_file:-}" ] && echo "[$(date +%Y-%m-%dT%H:%M:%S)] FAILED: somalier for ${family_id:-?} (rc=$rc)" >> "$log_file"' EXIT
 
 if [ -z "${proband_name:-}" ] || [ -z "${parent_1_name:-}" ] || [ -z "${family_id:-}" ] || [ -z "${fasta_path:-}" ]; then
 	usage
@@ -143,3 +149,5 @@ apptainer exec -C -B $HOME --pwd $input_directory \
   --labels /ancestry-labels-1kg.tsv \
   $APPTAINER_CACHEDIR/1kg-somalier/*.somalier \
    ++ $input_directory/Somalier_analyses/Extracted_profiles/*.somalier
+
+log_step "SUCCESS: somalier for ${family_id}"
