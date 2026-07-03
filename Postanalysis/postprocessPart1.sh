@@ -199,6 +199,19 @@ function log_step() {
 	echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" | tee -a "$log_file"
 }
 
+# send_status.log helpers — static file, stores last known status per step
+function step_done() {
+	grep -q "^${1}: DONE" "$directory/send_status.log" 2>/dev/null
+}
+function record_status() {
+	local key="$1" status="$2" send_log="$directory/send_status.log"
+	if grep -q "^${key}:" "$send_log" 2>/dev/null; then
+		sed -i "s|^${key}:.*|${key}: ${status}|" "$send_log"
+	else
+		echo "${key}: ${status}" >> "$send_log"
+	fi
+}
+
 # Function to pull images before script runs
 # I would normally put this in each respective script,but some clusters don't have internet on job nodes
 # $1 is imagename $2 is dockerhub
@@ -331,7 +344,8 @@ else
 fi
 
 report_file="$directory/R-${id}_$(date +'%Y-%m-%d_%H-%M-%S')_postprocess_report.txt"
-log_file="$directory/status_${id}.log"
+#log_file="$directory/status_${id}_$(date +'%Y-%m-%d_%H-%M-%S').log"
+log_file="$report_file"
 echo "Report file is $report_file"
 echo "Status log: $log_file"
 echo "Postprocessing started at $(date) for family $id group $group_name" > "$report_file"
@@ -524,7 +538,7 @@ if [ "$send_to_geneyx" == true ] || [ "$run_all" == true ]; then
 	if python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/JSON_Sample_Upload.py \
 		--jsonFile $directory/modifiedGeneYXTrio$family_id.json \
 		-c $my_config >> "$report_file" 2>&1; then
-		log_step "SUCCESS: GeneYX sample upload for $family_id"
+		log_step "DONE: GeneYX sample upload for $family_id"
 	else
 		rc=$?; log_step "FAILED: GeneYX sample upload for $family_id (rc=$rc)"; exit $rc
 	fi
@@ -572,7 +586,7 @@ EOF
 	if python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_CreateCase.py \
 		--data $directory/modifiedTrioCaseUpload$family_id.json \
 		-c $my_config >> "$report_file" 2>&1; then
-		log_step "SUCCESS: GeneYX case upload for $family_id"
+		log_step "DONE: GeneYX case upload for $family_id"
 	else
 		rc=$?; log_step "FAILED: GeneYX case upload for $family_id (rc=$rc)"; exit $rc
 	fi
@@ -592,12 +606,12 @@ if [ "$send_qc_to_geneyx" == true ] || [ "$run_all" == true ]; then
 	first_parentQCData=$(buildQCData "$first_parent_name" "1" "$(basename $first_parent_normalized_SNV)")
 	cat "$first_parentQCData" >> "$report_file"
 	if python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$probandQCData" -c $my_config >> "$report_file" 2>&1; then
-		log_step "SUCCESS: GeneYX QC upload for $proband_name"
+		log_step "DONE: GeneYX QC upload for $proband_name"
 	else
 		rc=$?; log_step "FAILED: GeneYX QC upload for $proband_name (rc=$rc)"; exit $rc
 	fi
 	if python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$first_parentQCData" -c $my_config >> "$report_file" 2>&1; then
-		log_step "SUCCESS: GeneYX QC upload for $first_parent_name"
+		log_step "DONE: GeneYX QC upload for $first_parent_name"
 	else
 		rc=$?; log_step "FAILED: GeneYX QC upload for $first_parent_name (rc=$rc)"; exit $rc
 	fi
@@ -608,7 +622,7 @@ if [ "$send_qc_to_geneyx" == true ] || [ "$run_all" == true ]; then
 		second_parentQCData=$(buildQCData "$second_parent_name" "2" "$(basename $second_parent_normalized_SNV)")
 		cat "$second_parentQCData" >> "$report_file"
 		if python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$second_parentQCData" -c $my_config >> "$report_file" 2>&1; then
-			log_step "SUCCESS: GeneYX QC upload for $second_parent_name"
+			log_step "DONE: GeneYX QC upload for $second_parent_name"
 		else
 			rc=$?; log_step "FAILED: GeneYX QC upload for $second_parent_name (rc=$rc)"; exit $rc
 		fi
@@ -758,11 +772,53 @@ fi
 
 #Cleanup and transfer step
 if [ "$include_cleanup" == true ] || [ "$run_all" == true ]; then
-	bash $here_folder/cleanup.sh -i $family_id -d $directory -c $config_file
-	bash $here_folder/outputs_Json.sh -i $family_id -d $directory -c $config_file
-	bash $here_folder/send_Symlinks_Narval.sh -i $family_id -d $directory -c $config_file -r
+	send_log="$directory/send_status.log"
+	if [ ! -f "$send_log" ]; then
+		echo "$family_id STATUS FOR TRANSFERS:" > "$send_log"
+	fi
 
-	#flow=6336492e-e308-4a67-b78e-13684c747472 # move and delete flow
+	if step_done "cleanup"; then
+		echo "Skipping cleanup.sh (already completed successfully)"
+	else
+		bash $here_folder/cleanup.sh -i $family_id -d $directory -c $config_file
+		record_status "cleanup" "DONE"
+	fi
+
+	if step_done "outputs_json"; then
+		echo "Skipping outputs_Json.sh (already completed successfully)"
+	else
+		bash $here_folder/outputs_Json.sh -i $family_id -d $directory -c $config_file
+		record_status "outputs_json" "DONE"
+	fi
+
+	destination_path="$(jq -r '.Transfers.destination_path' $config_file)"
+	cluster=$(jq -r '.Transfers.destination_cluster' "${config_file}")
+	if [ -z "$cluster" ]; then
+		echo "No destination cluster specified in config, not transferring directory"
+		exit 0
+	fi
+	# If an identity file is present, we are able to use robot node automation
+	# Else, run this interactively
+	identity_file=$(jq -r '.Transfers.identity_file' "$config_file")
+	if step_done "rsync_symlinks"; then
+		echo "Skipping rsync of symlinks (already completed successfully)"
+	else
+		echo "Sending symlinks from $directory to $USER@$cluster:$destination_path/$family_id"
+		if [ ! -n "$identity_line" ] &&   ; then
+			find "$directory" -type l -printf '%P\n' | \
+				rsync -rl --files-from=- "$directory" \
+				"$USER@$cluster:$destination_path/$family_id"
+		else
+			find "$directory" -type l -printf '%P\n' | \
+				rsync -rl -e "ssh -i $identity_file" --files-from=- "$directory" \
+				"$USER@$cluster:$destination_path/$family_id"
+		fi
+		record_status "rsync_symlinks" "DONE"
+	fi
+	#bash $here_folder/send_Symlinks_Narval.sh -i $family_id -d $directory -c $config_file -r
+
+	# This login part is only necessary the first time, but it needs to be done interactively
+	# I.e.: not in a sbatch job
 	destination_endpoint="$(jq -r '.Transfers.destination_endpoint' "${config_file}")" # Narval endpoint UUID
 	destination_collection="$(jq -r '.Transfers.destination_collection' "${config_file}")" # Narval collection UUID
 	source_endpoint="$(jq -r '.Transfers.working_endpoint' "${config_file}")"
@@ -772,27 +828,26 @@ if [ "$include_cleanup" == true ] || [ "$run_all" == true ]; then
 		exit 1
 	fi
 	globus login --gcs ${destination_endpoint}:${destination_collection} --gcs ${source_endpoint}:${source_collection}
-	# cluster=$(jq -r '.Transfers.cluster_name' "${config_file}")
-	# if [ "$cluster" == "Fir" ] || [ "$cluster" == "fir" ]; then
-	# 	echo "sbatch $final_job_line -J Globus_$family_id $here_folder/globus_cli_send.sh -i $family_id -d $directory -c $config_file -h $here_folder"
-	# 	sbatch "$final_job_line" -J Globus_$family_id "$here_folder/globus_cli_send.sh" -i "$family_id" -d "$directory" -c "$config_file" -h "$here_folder"
-	# 	exit 0
-	# else
 
 	#If ready to send, we can append to the final list (used for updating BAMs to the correct sample)
 	echo "$proband_name,$family_id/proband/${proband_name}" >>"$here_folder/geneYXNameList.txt"
 	echo "$first_parent_name,$family_id/${first_parent_role,,}/${first_parent_name}" >>"$here_folder/geneYXNameList.txt"
-	echo "$second_parent_name,$family_id/${second_parent_role,,}/${second_parent_name}" >>"$here_folder/geneYXNameList.txt"
-	destination_path="$(jq -r '.Transfers.destination_path' $config_file)"
-	#echo "globus transfer --label $family_id-transfer -r "${source_collection}:$directory" "${destination_collection}:${destination_path}/$family_id""
-	
-	#globus transfer --label $family_id-transfer -r "${source_collection}:$directory" "${destination_collection}:${destination_path}/$family_id"
+	if [ "$mode" == "trio" ]; then
+		echo "$second_parent_name,$family_id/${second_parent_role,,}/${second_parent_name}" >>"$here_folder/geneYXNameList.txt"
+	fi
 
-	#Normally, as long as we launch after multiqc (and cleanup), every step should have been done
-	final_dependency_line=$(dependencyLine "${final_dependencies[@]}")
-	echo "dependency line for Cleanup: $final_dependency_line"
-	globus_job_id=$(sbatch --parsable $final_dependency_line -D $directory -J final_globus_${family_id} "$here_folder/globus_cli_send.sh" -i "$family_id" -d "$directory" -c "$config_file" -t "$tools_folder" -m $mode -l "$log_file")
-	log_step "SUBMITTED: final_globus_${family_id} (job_id=$globus_job_id)"
+	if step_done "globus_send"; then
+		echo "Skipping globus send (already completed successfully)"
+	else
+		#Normally, as long as we launch after multiqc (and cleanup), every step should have been done
+		final_dependency_line=$(dependencyLine "${final_dependencies[@]}")
+		echo "dependency line for Cleanup: $final_dependency_line"
+		globus_job_id=$(sbatch --parsable $final_dependency_line -D $directory -J final_globus_${family_id} \
+			"$here_folder/globus_cli_send.sh" -i "$family_id" -d "$directory" -c "$config_file" \
+			-t "$tools_folder" -m $mode "$globus_r_arg" -l "$log_file" -S "$send_log")
+		log_step "SUBMITTED: final_globus_${family_id} (job_id=$globus_job_id)"
+		record_status "globus_send" "SUBMITTED:$globus_job_id"
+	fi
 
 fi
 	exit 0

@@ -186,7 +186,7 @@ if [ ! -f $sr_select_vcf ]; then
         -I "$sr_select_vcf"
 fi
 
-isec_report_dir="$concordance_dir/Isec"
+isec_report_dir="$concordance_dir/Isec_${sample_name}"
 bcftools isec  \
     -p "$isec_report_dir" \
     "$sr_select_vcf" \
