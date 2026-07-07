@@ -228,6 +228,29 @@ Once WGS pipeline outputs are available, the post-analysis phase uploads data to
 - **send_Symlinks_Narval.sh**
 	- *Goal*: Creates symlinks on Narval pointing to the transferred output files, making them accessible under a consistent directory structure for downstream users.
 
+- **run_concordance.sh**
+	- *Usage*: `sbatch Postanalysis/run_concordance.sh -n <sample_name> -v <lr_snv_vcf> -o <output_dir> [-f <fasta>] [-t <tools_folder>] [-l <log_file>]`
+	- *Goal*: Verifies that a PacBio long-read VCF and its matching Illumina short-read GVCF originate from the same patient, by computing genotype concordance across shared SNV sites (expected ≥ 90 % for same-patient pairs). Also runs a secondary hard-coded 44-SNP fingerprint check using `bcftools isec` for a quick sanity confirmation.
+	- *Inputs*:
+		- `-n`: Sample name — used to locate the Illumina GVCF on the staging server (`staging_juno:/pragmatiq-staging-sd4h/data/<sample_name>/`)
+		- `-v`: Normalized PacBio SNV VCF (`.vcf.gz`), typically produced by `postprocessPart1.sh`
+		- `-o`: Output directory; results are written under `<output_dir>/Concordance/`
+	- *Outputs* (written to `<output_dir>/Concordance/`):
+		- `concordance_report_<sample>.txt` — full genotype concordance report from `sr-lr_vcf_concordance.py`
+		- `Isec/<sample>_summary.txt` — 44-SNP position summary
+		- `Isec/<sample>_report.txt` — list of mismatched positions (empty if none)
+	- *Notes*: Downloads the GVCF from the staging server via `rclone` (requires `staging_juno` remote to be configured). Converts the GVCF to a VCF with GATK `GenotypeGVCFs` before comparison. Skips gracefully if the GVCF is not found on the staging server. The 44-SNP BED file is expected at `$SCRATCH/SNPs44.bed`.
+
+- **sr-lr_vcf_concordance.py**
+	- *Usage*: `python3 Postanalysis/sr-lr_vcf_concordance.py --vcf1 <lr.vcf.gz> --vcf2 <sr.vcf.gz> [--min-gq 20] [--min-dp 8] [--output report.txt]`
+	- *Goal*: Compares two VCFs (typically PacBio/DeepVariant vs. Illumina/GATK) and produces a cross-platform SNV concordance report to confirm they come from the same patient.
+	- *Inputs*: Two VCF or VCF.gz files (one per platform). Filters applied by default: PASS variants only, SNVs only, GQ ≥ 20, DP ≥ 8.
+	- *Outputs*: Prints a formatted report to stdout (with ANSI colour); optionally writes it to a file via `--output`. The report includes variant counts, shared-site intersection, a genotype confusion matrix, a Jaccard index, and a verdict:
+		- **SAME PATIENT** (≥ 90 % concordance on shared SNVs)
+		- **AMBIGUOUS** (75–90 %)
+		- **LIKELY DIFFERENT PATIENTS** (< 75 %)
+	- *Notes*: Requires `cyvcf2` and `numpy` (available via the `Tools/ENV` virtualenv). Called automatically by `run_concordance.sh`; can also be run standalone for ad-hoc comparisons.
+
 ---
 
 ### Not-yet-implemented modules

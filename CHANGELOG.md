@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
-## 2026-07-07
+## 2026-07-07: Refactor-MergeRequirements
 
 ### Changed
 - Combined all "requirements" files together in a single `Tools/requirements.txt`
@@ -30,9 +30,10 @@ skipping previously completed transfers that can take a significant amount of ti
 - Added a check in `globus_cli_send.sh` to make sure all samples passed the `sr-lr_vcf_concordance.py` tests
 
 
-## 2026-06-18
+## 2026-06-18: Refactor-MergeRequirements
 
 ### Added
+
 - `Analysis/default_miniwdl.cfg` as an example config to use for miniwdl
 
 ### Changed
