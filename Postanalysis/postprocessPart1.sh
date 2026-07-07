@@ -87,26 +87,19 @@ fi
 
 samplesheet=$(jq -r '.Paths.sample_sheet_path' ${config_file})/${id}.json
 
-#------Functions------#
-#This function loads the environment for GeneYX scripts
-function loadEnv(){
-	ENVDIR=$tools_folder/$1
-	if [ -d "$ENVDIR" ]; then
-		source $ENVDIR/bin/activate
-	else
-		virtualenv --no-download $ENVDIR
-		source $ENVDIR/bin/activate
-		pip install --no-index --upgrade pip
-		if [ "$1" == "GeneYX_env" ]; then
-			echo "Loading GeneYX environment"
-			pip install -r $tools_folder/requirementsGeneYXUpload.txt
-		elif [ "$1" == "Globus_env" ]; then
-			echo "Loading Globus environment"
-			pip install -r $tools_folder/requirementsGlobus.txt
-		fi
-	fi
-}
+#------Set up virtual env ------#
+module load python/3.11
+ENVDIR=$tools_folder/ENV
+if [ -d "$ENVDIR" ]; then
+	source $ENVDIR/bin/activate
+else
+	virtualenv --no-download $ENVDIR
+	source $ENVDIR/bin/activate
+	pip install --no-index --upgrade pip
+	pip install -r "$tools_folder/requirements.txt"
+fi
 
+#------Functions------#
 function ask_yes_no() {
 	local question="$1"
 	local var_name="$2"
@@ -505,7 +498,6 @@ fi
 
 #Send to GeneYX step
 if [ "$send_to_geneyx" == true ] || [ "$run_all" == true ]; then
-	loadEnv "GeneYX_env"
 	my_config=$(geneYXConfig)
 	#Building the JSON file for GeneYX upload
 	printf "{\n\t\"samples\": [\n\t" >$directory/modifiedGeneYXTrio$family_id.json
@@ -530,7 +522,6 @@ fi
 
 #Send Case to GeneYX step
 if [ "$send_case_to_geneyx" == true ] || [ "$run_all" == true ]; then
-	loadEnv "GeneYX_env"
 	my_config=$(geneYXConfig)
 	hpoTerms=$(jq -r '.["humanwgs_family.phenotypes"]' "$(dirname $output_file)/inputs.json")
 	if [ "$mode" == "duo" ]; then
@@ -576,7 +567,6 @@ fi
 
 #Send QC Data to GeneYX step
 if [ "$send_qc_to_geneyx" == true ] || [ "$run_all" == true ]; then
-	loadEnv "GeneYX_env"
 	my_config=$(geneYXConfig)
 	#Building the JSON file for GeneYX upload
 	echo "Retrieving QC data for proband..." >> "$report_file"
@@ -708,7 +698,6 @@ if [ "$include_cleanup" == true ] || [ "$run_all" == true ]; then
 	bash $here_folder/outputs_Json.sh -i $family_id -d $directory -c $config_file
 	bash $here_folder/send_Symlinks_Narval.sh -i $family_id -d $directory -c $config_file -r
 
-	loadEnv "Globus_env"
 	#flow=6336492e-e308-4a67-b78e-13684c747472 # move and delete flow
 	destination_endpoint="$(jq -r '.Transfers.destination_endpoint' "${config_file}")" # Narval endpoint UUID
 	destination_collection="$(jq -r '.Transfers.destination_collection' "${config_file}")" # Narval collection UUID

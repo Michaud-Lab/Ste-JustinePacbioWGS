@@ -21,16 +21,18 @@ This will described here in [Postanalysis](#post-analysis)
 
 ## Requirements
 Using the scripts here requires access to GeneYX and Emedgene. Access information and paths must be defined in the [config](#config) (by default named .myconf.json). \
-Each section usually has their own requirements.txt files in terms of venv. 
-For the Preanalysis part, the requirements are included in `Preanalysis/preanalysisRequirements.txt`, although these requirements are designed to be installed in a VENV on the Alliance Clusters specifically.
-The `globus_cli_get_run.sh` in Preanalysis also uses `Tools/requirementsGlobus.txt`. \
-The PostAnalysis part makes use of the Tools folder for requirements as well, including `Tools/requirementsGeneYXUpload.txt` and `Tools/requirementsGlobus.txt`. \
-For example, the steps to get the requirements for the Preanalysis requirements on the Alliance:
-1-	module load python/3.11
-2-	virtualenv --no-download ENV_Preanalysis
-3-  source ENV_Preanalysis/bin/activate
-4-  pip install --no-index --upgrade pip
-5-  pip install -r Tools/preanalysisRequirements.txt 
+All Python dependencies are consolidated in `Tools/requirements.txt`. These versions are pinned for the Alliance Clusters (`+computecanada` suffix). \
+If you use a python script, you must load the requirements manually: \
+To set up the environment on an Alliance cluster: \
+1-	module load python/3.11 scipy-stack/2026a \
+2-	virtualenv --no-download Tools/ENV \
+3-  source Tools/ENV/bin/activate \
+4-  pip install --no-index --upgrade pip \
+5-  pip install -r Tools/requirements.txt \
+6-  cp Analysis/exec_script.sh Tools/ENV/lib/python3.11/site-packages/miniwdl_slurm/scripts/exec_script.sh \
+(This last step replaces the native exec_script.sh for one that uses $SLURM_TMPDIR. This helps execution time and general efficiency of tasks on the Alliance Clusters)
+\
+Meanwhile, most bash scripts (globus get and send, postprocessPart1.sh) that needs these requirements will install them manually in Tools/ENV when you run them for the first time. \
 
 ### Files and directories
 My fork of the analysis pipeline is available [here](https://github.com/FelixAntoineLeSieur/HiFi-human-WGS-WDL) and includes installation instruction. \

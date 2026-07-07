@@ -7,8 +7,6 @@
 # This script is meant to use globus to send a fully processed folder
 # This will ignore symlinks 
 
-
-
 set -eu
 echo "Arguments:"
 for var in "$@"; do
@@ -118,17 +116,18 @@ destination_collection="$(jq -r '.Transfers.destination_collection' "${config_fi
 source_endpoint="$(jq -r '.Transfers.working_endpoint' "${config_file}")"
 source_collection="$(jq -r '.Transfers.working_collection' "${config_file}")"
 
-echo "here folder: $tools_folder/Globus_env"
-ENVDIR=$tools_folder/Globus_env
+
+ENVDIR=$tools_folder/ENV
 if [ -d "$ENVDIR" ]; then
-	echo "using existing Globus environment at $ENVDIR"
+	echo "using existing environment at $ENVDIR"
 	source $ENVDIR/bin/activate
 else
+	module load python/3.11 scipy-stack/2026a
 	virtualenv --no-download $ENVDIR
 	source $ENVDIR/bin/activate
 	pip install --no-index --upgrade pip
-	echo "Loading Globus environment"
-	pip install -r $tools_folder/requirementsGlobus.txt
+	echo "Loading environment"
+	pip install -r "$tools_folder/requirements.txt"
 fi
 globus transfer --label $family_id-transfer -r "${source_collection}:$directory" "${destination_collection}:${destination_path}/$family_id"
 
