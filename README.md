@@ -23,12 +23,14 @@ This will described here in [Postanalysis](#post-analysis)
 Using the scripts here requires access to GeneYX and Emedgene. Access information and paths must be defined in the [config](#config) (by default named .myconf.json). \
 All Python dependencies are consolidated in `Tools/requirements.txt`. These versions are pinned for the Alliance Clusters (`+computecanada` suffix). \
 If you use a python script, you must load the requirements manually: \
-To set up the environment on an Alliance cluster:
-1-	module load python/3.11 scipy-stack/2026a
-2-	virtualenv --no-download Tools/ENV
-3-  source Tools/ENV/bin/activate
-4-  pip install --no-index --upgrade pip
-5-  pip install -r Tools/requirements.txt
+To set up the environment on an Alliance cluster: \
+1-	module load python/3.11 scipy-stack/2026a \
+2-	virtualenv --no-download Tools/ENV \
+3-  source Tools/ENV/bin/activate \
+4-  pip install --no-index --upgrade pip \
+5-  pip install -r Tools/requirements.txt \
+6-  cp Analysis/exec_script.sh Tools/ENV/lib/python3.11/site-packages/miniwdl_slurm/scripts/exec_script.sh \
+(This last step replaces the native exec_script.sh for one that uses $SLURM_TMPDIR. This helps execution time and general efficiency of tasks on the Alliance Clusters)
 \
 Meanwhile, most bash scripts (globus get and send, postprocessPart1.sh) that needs these requirements will install them manually in Tools/ENV when you run them for the first time. \
 

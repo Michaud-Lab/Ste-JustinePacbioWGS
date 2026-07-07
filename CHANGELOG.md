@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
+## 2026-07-07
+
+### Changed
+- Combined all "requirements" files together in a single `Tools/requirements.txt`
+- Added miniwdl and miniwdl-slurm to `Tools/requirements.txt`, as well as the scipy-stack tools
+- Added `Analysis/exec_script.sh`, meant to replace the one automatically installed from miniwdl-slurm (ENV/lib/python3.11/site-packages/miniwdl_slurm/scripts/exec_script.sh)
+- added Hifi-WGS-WDL fork to Analysis folder
+
 ## 2026-06-18
 
 ### Added
