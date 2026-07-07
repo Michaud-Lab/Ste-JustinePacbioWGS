@@ -4,3 +4,6 @@
 [submodule "Postanalysis/MichaudLab-pacbio_postprocessing"]
 	path = Postanalysis/MichaudLab-pacbio_postprocessing
 	url = https://github.com/FelixAntoineLeSieur/MichaudLab-pacbio_postprocessing.git
+[submodule "Analysis/HiFi-human-WGS-WDL"]
+	path = Analysis/HiFi-human-WGS-WDL
+	url = https://github.com/FelixAntoineLeSieur/HiFi-human-WGS-WDL.git
