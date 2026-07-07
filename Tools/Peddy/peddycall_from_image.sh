@@ -23,30 +23,22 @@ for var in "$@"; do
  echo $var
 done
 
-usage() { echo "Usage: $0 [-i <familyID>] [-p <proband_name>] [-1 <parent_1_name>] [-2 <parent_2_name>] [-d <input_directory>]" 1>&2; exit 1; }
+usage() { echo "Usage: $0 -i <familyID> -p <proband_name> -1 <parent_1_name> [-2 <parent_2_name>] -d <input_directory>" 1>&2; exit 1; }
 parent_2_name=""
-while getopts ":p:1:2:i:d:" o; do
+log_file=""
+while getopts ":p:1:2:i:d:l:" o; do
     case "${o}" in
-        p)
-            proband_name=${OPTARG}
-            ;;
-        1)
-            parent_1_name=${OPTARG}
-            ;;
-        2)
-            parent_2_name=${OPTARG}
-            ;;
-        i)
-			family_id=${OPTARG}
-			;;
-        d)
-            input_directory=${OPTARG}
-            ;;
-		*)
-            usage
-            ;;
+        p) proband_name=${OPTARG} ;;
+        1) parent_1_name=${OPTARG} ;;
+        2) parent_2_name=${OPTARG} ;;
+        i) family_id=${OPTARG} ;;
+        d) input_directory=${OPTARG} ;;
+        l) log_file=${OPTARG} ;;
+		*) usage ;;
     esac
 done
+log_step() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; [ -n "${log_file:-}" ] && echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >> "$log_file"; }
+trap 'rc=$?; [ $rc -ne 0 ] && [ -n "${log_file:-}" ] && echo "[$(date +%Y-%m-%dT%H:%M:%S)] FAILED: peddy for ${family_id:-?} (rc=$rc)" >> "$log_file"' EXIT
 if [ -z "${proband_name:-}" ] || [ -z "${parent_1_name:-}" ] || [ -z "${family_id:-}" ]; then
 	usage
 fi
@@ -71,7 +63,7 @@ fi
 
 ped_file="$input_directory/${family_id}.ped"
 
-cd $input_directory
+cd "$input_directory"
 
 function index_vcf() {
 	if [ -f "$1.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" ]; then
@@ -90,11 +82,9 @@ if [ "$parent_2_name" != "null" ] && [ "$parent_2_name" != "" ]; then
 	index_vcf "$parent_2_name"
 fi
 
-
-here_folder=$(realpath $(dirname $0))
-
+family_merged_vcf="$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz"
 #We start with a normalized vcf separated for each individual, we just need to merge it again
-if [ ! -f "$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz" ]; then
+if [ ! -f "$family_merged_vcf" ]; then
 		echo "Merging normed VCFs"
 		if [ "$parent_2_name" != "null" ] && [ "$parent_2_name" != "" ]; then
 			if [ ! -f "$parent_2_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz.tbi" ]; then
@@ -104,26 +94,27 @@ if [ ! -f "$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz" ]
 				"$proband_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
 				"$parent_1_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
 				"$parent_2_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
-				-o "$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz" -O z
+				-o "$family_merged_vcf" -O z
 		else #duo
 			bcftools merge \
 				"$proband_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
 				"$parent_1_name.$family_id.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
-				-o "$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz" -O z
+				-o "$family_merged_vcf" -O z
 
 		fi
 		echo "Generating Index for merged normed VCFs"
-		tabix -f -p vcf "$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz"
+		tabix -f -p vcf "$family_merged_vcf"
 	fi
 
-
-mkdir -p "$input_directory/Peddy_analyses"
+peddy_dir="$input_directory/Peddy_analyses"
+mkdir -p "$peddy_dir"
 echo "Running Peddy relate"
 
-apptainer exec -C -B $HOME -B $SCRATCH --pwd "$input_directory/Peddy_analyses" -W "$SLURM_TMPDIR" \
+apptainer exec -C -B $HOME -B $SCRATCH --pwd "$peddy_dir" -W "$SLURM_TMPDIR" \
 	$image \
 	python -m peddy --plot --sites hg38 --prefix "${family_id}_peddy" \
-	"$input_directory/$family_id.merged.normed.joint.GRCh38.small_variants.phased.vcf.gz" \
+	"$input_directory/$family_merged_vcf" \
 	"$ped_file"
 
 echo "Peddy complete"
+log_step "SUCCESS: peddy for ${family_id}"

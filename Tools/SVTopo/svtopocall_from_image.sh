@@ -29,7 +29,8 @@ done
 
 usage() { echo "Usage: $0  [-p <prefix>] [-b <haplotagged bam>] [-i <haplotagged bam index>] [-s <supporting reads>] [-v <SV vcf>] [-r <resource folder>] [-o <Output Dir>] [-t <tools folder>]" 1>&2; exit 1; }
 
-while getopts ":p:b:i:r:v:o:s:t:" o; do
+log_file=""
+while getopts ":p:b:i:r:v:o:s:t:l:" o; do
     case "${o}" in
         p)
             echo "prefix: ${OPTARG}"
@@ -58,12 +59,17 @@ while getopts ":p:b:i:r:v:o:s:t:" o; do
         t)
             tools_folder=${OPTARG}
             ;;
+        l)
+            log_file=${OPTARG}
+            ;;
 	      *)
             echo "Received invalid option"
             usage
             ;;
     esac
 done
+log_step() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; [ -n "${log_file:-}" ] && echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >> "$log_file"; }
+trap 'rc=$?; [ $rc -ne 0 ] && [ -n "${log_file:-}" ] && echo "[$(date +%Y-%m-%dT%H:%M:%S)] FAILED: svtopo for ${prefix:-?} (rc=$rc)" >> "$log_file"' EXIT
 
 if [ -z "${prefix:-}" ] || [ -z "${haplotagged_bam:-}" ] || [ -z "${haplotagged_bam_index:-}" ] || [ -z "${supporting_reads:-}" ] || [ -z "${vcf:-}" ] || [ -z "${resource_folder:-}" ]; then
 	usage
@@ -126,3 +132,4 @@ apptainer exec -C -W $SLURM_TMPDIR -B $HOME -B $SLURM_TMPDIR \
 
 mkdir -p "$outputDir/SVTOPO_OUTPUTS/${prefix}_svtopo"
 cp -rv $SLURM_TMPDIR/SVTOPO_OUTPUTS/${prefix}_svtopo $outputDir/SVTOPO_OUTPUTS
+log_step "SUCCESS: svtopo for ${prefix}"
