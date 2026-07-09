@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 import logging
 import glob
+import pandas as pd
 import json
 from Emedgene import Emedgene
 from configurator import Config
@@ -11,7 +12,7 @@ class Sample:
 	"""
 	Sample object for patients. Eventually will be separated into Case Class and Sample Class
 	"""
-	def __init__(self, run_id, well, name="", bam_path="", fail_bam="", status={},HPOs="", config_file=os.path.expanduser(".myconf.json")):
+	def __init__(self, run_id, well, name="", bam_path="", fail_bam="", status={},HPOs="", study="",config_file=os.path.expanduser(".myconf.json")):
 		self.run_id		=	run_id #ie r84196_20250224_170647
 		configs         = 	Config.from_path(config_file)
 		
@@ -72,6 +73,13 @@ class Sample:
 		#phenotype overrides if present
 		if len(HPOs) != 0:
 			self.phenotypes = HPOs
+		print(f"trying to get study for {self.name}")
+		if study == "":
+			sharepoint_list=configs.Paths.sharepoint_list
+			print(f"List:{sharepoint_list}")
+			self.study = self.get_study_info(sharepoint_list)
+		else:
+			self.study = study
 
 	def find_bam_path(self):
 		"""
@@ -108,6 +116,57 @@ class Sample:
 		grep_command = f"grep -o \"BioSample Name=\".*\"\" {self.sample_path}/pb_formats/*_s*.hifi_reads.bc*.consensusreadset.xml | cut -f2 -d'\"' | tr -d '\n'"
 		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
 		return grep_result.stdout
+	
+	def get_study_info(self, main_csv_path):
+		"""
+		Reads a main CSV containing study information from sharepoint
+		Returns: Str (Study Name) or error
+		"""
+		try:
+			# Read the main CSV file
+			print(f"Trying to read {main_csv_path}")
+			df = pd.read_csv(main_csv_path)
+			print("got df")
+			# Get the set of all specimen identifiers from the main CSV
+			all_specimens_in_csv = set(df["Identifiant : Specimen"].dropna())
+
+			# Create a DataFrame to be used as the left side of the join
+			specimens_to_find_df = pd.DataFrame({"Identifiant : Specimen": [self.name]})
+
+			# Perform a left join. The order of the keys from the left frame is preserved.
+			filtered_df = pd.merge(specimens_to_find_df, df, on="Identifiant : Specimen", how="left", sort=False)
+			# Detect specimens that matched more than one row in the main CSV
+			duplicate_counts = filtered_df.groupby("Identifiant : Specimen", sort=False).size()
+			duplicates = duplicate_counts[duplicate_counts > 1]
+			if not duplicates.empty:
+				print(f"WARNING: {len(duplicates)} specimen(s) matched multiple rows in the study dataset for {self.name}:", file=sys.stderr)
+				for specimen, count in duplicates.items():
+					cohorts = filtered_df.loc[filtered_df["Identifiant : Specimen"] == specimen, "Cohorte"].tolist()
+					cohorts_str = ", ".join(str(c) for c in cohorts)
+					print(f"  - {specimen}: {count} matches (Cohorts: {cohorts_str})", file=sys.stderr)
+
+			# Detect specimens from the list that were not found in the sharepoint CSV
+			missing_mask = filtered_df["Identifiant : Specimen"].isna()
+			missing_specimens = filtered_df.loc[missing_mask, "Identifiant : Specimen"].tolist()
+			if missing_specimens:
+				print(f"WARNING: {len(missing_specimens)} specimen(s) from the list were NOT found in the dataset:", file=sys.stderr)
+				for s in missing_specimens:
+					print(f"  - {s}", file=sys.stderr)
+			else:
+				cohorte=filtered_df[filtered_df["Identifiant : Specimen"]== self.name ]["Cohorte"]
+				print(f"{self.name} Cohorte: {cohorte}")
+				return cohorte
+			
+		except FileNotFoundError as e:
+			print(f"Error: File not found - {e}", file=sys.stderr)
+			sys.exit(1)
+		except KeyError as e:
+			print(f"Error: Column not found in CSV - {e}. Please check the CSV header.", file=sys.stderr)
+			sys.exit(1)
+		except Exception as e:
+			print(f"An unexpected error occurred: {e}", file=sys.stderr)
+			sys.exit(1)
+
 
 	def find_status(self,json_file):
 		"""
@@ -209,4 +268,4 @@ class Sample:
 
 
 	def __str__(self):
-		return (f"{self.name};{self.well};{self.barcode};{self.run_id};{self.case_status['Gender']};{self.case_status['Status']};{self.case_status['Role']};{self.phenotypes}")
+		return (f"{self.name};{self.well};{self.barcode};{self.run_id};{self.case_status['Gender']};{self.case_status['Status']};{self.case_status['Role']};{self.phenotypes};{self.study}")

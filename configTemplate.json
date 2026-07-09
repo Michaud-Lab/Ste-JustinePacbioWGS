@@ -23,7 +23,9 @@
 			"output_path": "/home/felixant/scratch/Outputs",
 			"tertiary_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.tertiary_map.v2p0p0.tsv",
 			"miniwdl_cfg": "/home/felixant/scratch/Ste-JustinePacbioWGS/Analysis",
-			"s3_folder": "/home/felixant/scratch/S3-Storage"
+			"s3_folder": "/home/felixant/scratch/S3-Storage",
+			"bioinfo_excel": "/home/felixant/links/scratch/Ste-JustinePacbioWGS/Bioinfo-LR_SampleData.xlsx",
+			"sharepoint_list": "/home/felixant/links/scratch/Ste-JustinePacbioWGS/ListePRAGMatIQ.csv"
 		},
 	"Transfers":
 		{

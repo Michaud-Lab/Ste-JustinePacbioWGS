@@ -40,7 +40,7 @@ if __name__ == "__main__":
 		grep_command = f"grep -o \"BioSample Name=\".*\"\" {well_folder}/pb_formats/*_s*.hifi_reads.bc*.consensusreadset.xml | cut -f2 -d'\"' | tr -d '\n'"
 		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
 		given_name = grep_result.stdout
-
+		print(f"Well folder: {well_folder}")
 		#Special case for Decodeur Samples
 		if given_name[0:3] == "HSJ":
 			family_name = given_name[:-3]
@@ -79,11 +79,16 @@ if __name__ == "__main__":
 
 	#Check to see if the run_ID is already in the list
 	#Having duplicates would cause problems later
-	existing_list = pd.read_csv(args.list,sep=";",names=["Name","Well","Barcode","run_id","Gender","Status","Role","HPO","BAM","Affected"])
+	existing_list = pd.read_csv(args.list,sep=";",names=["Name","Well","Barcode","run_id","Gender","Status","Role","HPO","BAM","Affected","Study"])
 
-	if args.run in existing_list["run_id"].values:
-		print(f"Warning: Samples from run id {args.run} are already in the list. Skipping append")
-	else:
-		for sample in sorted_list:
-			with open(args.list, "a") as fw:
-				fw.write(f"{sample.__str__()};{sample.bam_path};{sample.case_status['Affected']}\n")
+	for sample in sorted_list:
+		if sample.name in existing_list["Name"].values:
+			print(f"mything:{existing_list[existing_list['Name']==sample.name]['run_id'].values}")
+			if sample.run_id == existing_list[existing_list["Name"]==sample.name]["run_id"].values:
+				print(f"Warning: Sample {sample.name} from run id {sample.run_id} already in list. Skipping append")
+				sys.exit(0)
+			else:
+				print(f"Warning: Sample {sample.name} is already in list with run id {existing_list['run_id']} Appending anyways")
+
+		with open(args.list, "a") as fw:
+			fw.write(f"{sample.__str__()};{sample.bam_path};{sample.case_status['Affected']}\n")
