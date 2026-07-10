@@ -7,12 +7,20 @@ import pandas as pd
 import json
 from Emedgene import Emedgene
 from configurator import Config
+import numpy as np
 
 class Sample:
 	"""
 	Sample object for patients. Eventually will be separated into Case Class and Sample Class
 	"""
 	def __init__(self, run_id, well, name="", bam_path="", fail_bam="", status={},HPOs="", study="",config_file=os.path.expanduser(".myconf.json")):
+		string_args = {"run_id": run_id, "well": well, "name": name, "bam_path": bam_path,
+			"fail_bam": fail_bam, "HPOs": HPOs, "study": study, "config_file": config_file}
+		for arg_name, arg_value in string_args.items():
+			if not isinstance(arg_value, str):
+				print(f"Error: argument '{arg_name}' must be of type str, got {type(arg_value).__name__} ({arg_value!r})", file=sys.stderr)
+				sys.exit(1)
+
 		self.run_id		=	run_id #ie r84196_20250224_170647
 		configs         = 	Config.from_path(config_file)
 		
@@ -24,13 +32,13 @@ class Sample:
 		self.sample_path=	self.runs_path + f"{run_id}/{well}"
 		
 
-		if len(bam_path) != 0:
+		if bam_path != "":
 			self.bam_path	=	bam_path
 		else:
 			self.bam_path	=	self.find_bam_path()
 
 		#Optionally, we can provide a failed reads bam for TR calling
-		if len(fail_bam) != 0:
+		if fail_bam != "":
 			self.fail_bam	=	fail_bam
 		else:
 			self.fail_bam	=	self.find_fail_bam()
@@ -39,13 +47,13 @@ class Sample:
 		self.barcode	=	self.bam_path.split("/")[-1].split("bc")[-1].removesuffix(".bam")
 		#Sometimes, the name from sequencing is not compatible with the Emedgene name, so it must be given manually.
 		#For example, we receive GMXXXX_redo or GMXXXX_new, while the Emedgene name should be GMXXXX 
-		if len(name) != 0:
+		if name != "":
 			self.name	=	name
 		else:
 			self.name	=	self.find_name()
 
 		#If status is pre-defined, we don't need to investigate emedgene
-		if len(status) != 0:
+		if status != {}:
 			self.case_status = status
 			emg_case_id = "skip"
 			self.phenotypes = ""
@@ -53,11 +61,11 @@ class Sample:
 		else:
 			emg_case_id	=	Emedgene(config_file=config_file).get_emg_id(self.name)
 			
-		#Does the patient belong to a trio, duo, or a singleton? Alse gender, family role and Affected status
+		#Does the patient belong to a trio, duo, or a singleton? Also gender, family role and Affected status
 		#if isinstance(self.emg_case_json,int):
 		if emg_case_id == "":
 			#If we get an int (error code) on Emedgene, we suppose it is likely a validation case, always singleton
-			self.case_status = {"Status": "Singleton", "Role":"proband", "Gender":"null", "Affected": True}
+			self.case_status = {"Status": "Singleton", "Role":"proband", "Gender":"", "Affected": True}
 			self.phenotypes = ""
 		elif emg_case_id != "skip":
 			emg_case_json	=	Emedgene(config_file=config_file).get_case_json(emg_case_id)
@@ -71,12 +79,10 @@ class Sample:
 				self.phenotypes		=	""
 		
 		#phenotype overrides if present
-		if len(HPOs) != 0:
+		if HPOs != "":
 			self.phenotypes = HPOs
-		print(f"trying to get study for {self.name}")
 		if study == "":
 			sharepoint_list=configs.Paths.sharepoint_list
-			print(f"List:{sharepoint_list}")
 			self.study = self.get_study_info(sharepoint_list)
 		else:
 			self.study = study
@@ -124,9 +130,7 @@ class Sample:
 		"""
 		try:
 			# Read the main CSV file
-			print(f"Trying to read {main_csv_path}")
 			df = pd.read_csv(main_csv_path)
-			print("got df")
 			# Get the set of all specimen identifiers from the main CSV
 			all_specimens_in_csv = set(df["Identifiant : Specimen"].dropna())
 
@@ -144,18 +148,9 @@ class Sample:
 					cohorts = filtered_df.loc[filtered_df["Identifiant : Specimen"] == specimen, "Cohorte"].tolist()
 					cohorts_str = ", ".join(str(c) for c in cohorts)
 					print(f"  - {specimen}: {count} matches (Cohorts: {cohorts_str})", file=sys.stderr)
-
-			# Detect specimens from the list that were not found in the sharepoint CSV
-			missing_mask = filtered_df["Identifiant : Specimen"].isna()
-			missing_specimens = filtered_df.loc[missing_mask, "Identifiant : Specimen"].tolist()
-			if missing_specimens:
-				print(f"WARNING: {len(missing_specimens)} specimen(s) from the list were NOT found in the dataset:", file=sys.stderr)
-				for s in missing_specimens:
-					print(f"  - {s}", file=sys.stderr)
-			else:
-				cohorte=filtered_df[filtered_df["Identifiant : Specimen"]== self.name ]["Cohorte"]
-				print(f"{self.name} Cohorte: {cohorte}")
-				return cohorte
+			cohorte=filtered_df.at[0,"Cohorte"]
+			if pd.isna(cohorte): cohorte = "No Cohort"
+			return cohorte
 			
 		except FileNotFoundError as e:
 			print(f"Error: File not found - {e}", file=sys.stderr)
@@ -268,4 +263,4 @@ class Sample:
 
 
 	def __str__(self):
-		return (f"{self.name};{self.well};{self.barcode};{self.run_id};{self.case_status['Gender']};{self.case_status['Status']};{self.case_status['Role']};{self.phenotypes};{self.study}")
+		return (f"""{self.name};{self.well};{self.barcode};{self.run_id};{str(self.case_status['Gender'])};{str(self.case_status['Status'])};{str(self.case_status['Role'])};{str(self.phenotypes)};{str(self.study)}""")

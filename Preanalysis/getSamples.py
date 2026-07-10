@@ -40,13 +40,12 @@ if __name__ == "__main__":
 		grep_command = f"grep -o \"BioSample Name=\".*\"\" {well_folder}/pb_formats/*_s*.hifi_reads.bc*.consensusreadset.xml | cut -f2 -d'\"' | tr -d '\n'"
 		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
 		given_name = grep_result.stdout
-		print(f"Well folder: {well_folder}")
 		#Special case for Decodeur Samples
 		if given_name[0:3] == "HSJ":
 			family_name = given_name[:-3]
 			if given_name[-2:] == "03" or given_name[-2:] == "04":
 				role = "proband"
-				gender = "null"
+				gender = ""
 			elif given_name[-2:] == "02":
 				role = f"mother of {family_name}-03"
 				gender = "Female"
@@ -58,13 +57,14 @@ if __name__ == "__main__":
 				sys.exit()
 
 			status = {"Status": "Decodeur", "Role":role, "Gender":gender, "Affected": False}
-			print(f"Status for {given_name}: {status}")
+			study = "Decodeur"
 		else:
 			status = {}
+			study = ""
 
 
 		well = str(well_folder).split("/")[-1]
-		sample = Sample(args.run,well,given_name,status=status,config_file=args.config)
+		sample = Sample(args.run,well,given_name,status=status,study=study,config_file=args.config)
 		sample_list.append(sample)
 
 	if not sample_list:
@@ -79,16 +79,35 @@ if __name__ == "__main__":
 
 	#Check to see if the run_ID is already in the list
 	#Having duplicates would cause problems later
-	existing_list = pd.read_csv(args.list,sep=";",names=["Name","Well","Barcode","run_id","Gender","Status","Role","HPO","BAM","Affected","Study"])
-
+	existing_list = pd.read_csv(args.list,sep=";",
+		names=["Name","Well","Barcode","run_id","Gender",
+			"Status","Role","HPO","Study","BAM","Affected"])
+	existing_list = existing_list.where(existing_list.notnull(), "")
 	for sample in sorted_list:
+		skip_append=False
 		if sample.name in existing_list["Name"].values:
-			print(f"mything:{existing_list[existing_list['Name']==sample.name]['run_id'].values}")
-			if sample.run_id == existing_list[existing_list["Name"]==sample.name]["run_id"].values:
-				print(f"Warning: Sample {sample.name} from run id {sample.run_id} already in list. Skipping append")
-				sys.exit(0)
-			else:
-				print(f"Warning: Sample {sample.name} is already in list with run id {existing_list['run_id']} Appending anyways")
-
-		with open(args.list, "a") as fw:
-			fw.write(f"{sample.__str__()};{sample.bam_path};{sample.case_status['Affected']}\n")
+			existing_sample=existing_list[existing_list['Name']==sample.name]
+			if existing_sample.shape[0] > 1:
+				print(f"More than one existing match for {sample.name}")
+			for index, row in existing_sample.iterrows():
+					existing_sample_object=Sample(
+					run_id = str(row["run_id"]),
+					well = str(row["Well"]),
+					bam_path = str(row["BAM"]),
+					status = {"Status":str(row["Status"]),"Role":str(row["Role"]),
+						"Gender":str(row["Gender"]),"Affected":row["Affected"]},
+					HPOs = str(row["HPO"]),
+					study = row["Study"],
+					config_file = args.config)
+					if str(existing_sample_object) == str(sample):
+						print(f"Sample {sample.name} is identical to pre-existing sample. Skipping append")
+						skip_append=True
+					else:
+						print(f"Sample {sample.name} is similar to to pre-existing sample {row['Name']}:")
+						print(sample)
+						print("vs")
+						print(existing_sample_object)
+						print("Writting it to list anyways")
+		if not skip_append:
+			with open(args.list, "a") as fw:
+				fw.write(f"{sample.__str__()};{sample.bam_path};{sample.case_status['Affected']}\n")

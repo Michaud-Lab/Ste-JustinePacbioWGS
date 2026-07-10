@@ -4,6 +4,8 @@ import sys
 
 def get_study_info(main_csv_path, specimen_list_path):
 	"""
+	This is a legacy script, rarely needed to be used now that this method was integrated in Sample.py
+	If you have several samples without Study, you could still use it. 
 	Reads a main CSV and a list of specimens, then prints selected columns
 	for the union of specimens found in both sources.
 
