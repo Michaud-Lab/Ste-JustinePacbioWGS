@@ -1,5 +1,8 @@
 [← Back to main README](../README.md)
 
+<img width="810" height="583" alt="image" src="https://github.com/user-attachments/assets/593bb9f8-68c5-42b2-b096-ab50f0808048" />
+
+
 # Preanalysis
 
 This directory contains the scripts used to prepare samples for the WGS Analysis pipeline. The pre-analysis phase covers two main tasks: (1) retrieving sample metadata from Emedgene and organising samples into families, and (2) downloading run files from the source cluster and generating the WDL-compatible samplesheets required by the Analysis pipeline.
