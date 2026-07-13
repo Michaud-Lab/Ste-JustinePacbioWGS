@@ -1,5 +1,8 @@
 [← Back to main README](../README.md)
 
+<img width="810" height="990" alt="image" src="https://github.com/user-attachments/assets/88774e97-4489-4452-864e-bd95a2cee55b" />
+
+
 # Post-analysis
 
 Once WGS pipeline outputs are available (i.e. the folder "out" can be found in the "_LAST" run folder of the analysis), the post-analysis phase uploads data to tertiary analysis platforms, generates QC reports, validates sample identity, and transfers results to long-term storage.
@@ -23,6 +26,8 @@ Most steps are interactively orchestrated by `postprocessPart1.sh`, which submit
     - `status_{id}_YYYY-MM-DD_HH-MM-SS.log` — timestamped step status log (SUBMITTED / SUCCESS / FAILED per step)
     - `send_status.log` — static per-step status file for the cleanup/transfer steps; supports re-run skipping
 
+---
+
 - **outputs_Json.sh**
   - *Usage*: `bash Postanalysis/outputs_Json.sh -i <familyID> -d <directory> [-c config]`
   - *Goal*: Parses the miniwdl `outputs.json` file to resolve absolute file paths and updates them to match the destination path on Narval. Creates symlinks in the local S3-Storage folder (one per file type per sample), then rsyncs that folder to Narval via the robot node.
@@ -31,6 +36,8 @@ Most steps are interactively orchestrated by `postprocessPart1.sh`, which submit
     - `outputs.json` updated in-place with destination-corrected paths (original backed up as `outputs.json.bak2`)
     - Symlinks in `$s3_folder/<familyID>/<role>/` for haplotagged BAMs, BAM indices, and CpG pileup BED files
     - `fullsampleSheet.csv` — maps each sample role to its new destination path
+
+---
 
 - **globus_cli_send.sh**
   - *Usage*: `sbatch Postanalysis/globus_cli_send.sh -i <familyID> -d <directory> -m <duo|trio> [-t tools_folder] [-r] [-c config] [-l log_file] [-S send_status_log]`
@@ -46,17 +53,23 @@ Most steps are interactively orchestrated by `postprocessPart1.sh`, which submit
     - `-S` Send-status log file (receives `globus_send: SUCCESS` on completion)
   - *Outputs*: A Globus transfer to `destination_path/<familyID>/`; `summary_report.txt` in the family directory listing which checks passed or failed.
 
+---
+
 - **cleanup.sh**
   - *Usage*: `bash Postanalysis/cleanup.sh -i <familyID> -d <directory> [-c config]`
   - *Goal*: Removes large intermediate miniwdl work directories to free scratch space. Keeps all final outputs, QC reports, and VCFs. Safe to run after files have been transferred to Narval.
   - *What is removed*: pbmm2 alignment chunks, split BAM work directories, samtools merge work directories, merged HiFi read intermediates, captured fail-read intermediates, DeepVariant make-examples shards.
   - *Outputs*: Freed disk space on the working cluster.
 
+---
+
 - **send_Symlinks_Narval.sh**
   - *Usage*: `bash Postanalysis/send_Symlinks_Narval.sh -i <familyID> -d <directory> [-r] [-c config]`
   - *Goal*: Transfers the symlinks from the working directory to Narval using rsync (`-l` flag to preserve symlinks). Useful when Globus is unavailable or for re-sending symlinks after an update.
   - *Arguments*: `-i` family ID, `-d` directory, `-r` use robot/automation node (requires `identity_file` in config), `-c` config.
   - *Outputs*: Symlinks replicated under `destination_path/<familyID>/` on Narval.
+
+---
 
 - **run_concordance.sh**
   - *Usage*: `sbatch Postanalysis/run_concordance.sh -n <sample_name> -v <lr_snv_vcf> -o <output_dir> [-f <fasta>] [-t <tools_folder>] [-l <log_file>]`
@@ -74,6 +87,8 @@ Most steps are interactively orchestrated by `postprocessPart1.sh`, which submit
     - `Isec/<sample>_report.txt` — list of mismatched positions (empty if none)
   - *Notes*: Downloads the GVCF via `rclone` (requires `staging_juno` remote configured). Converts the GVCF to VCF with GATK `GenotypeGVCFs` before comparison. Skips gracefully if the GVCF is not found on the staging server. The 44-SNP BED file is expected at `$SCRATCH/SNPs44.bed`.
 
+---
+
 - **sr-lr_vcf_concordance.py**
   - *Usage*: `python3 Postanalysis/sr-lr_vcf_concordance.py --vcf1 <lr.vcf.gz> --vcf2 <sr.vcf.gz> [--min-gq 20] [--min-dp 8] [--output report.txt]`
   - *Goal*: Compares two VCFs (PacBio/DeepVariant vs. Illumina/GATK) and produces a cross-platform SNV concordance report to confirm they come from the same patient.
@@ -88,6 +103,8 @@ Most steps are interactively orchestrated by `postprocessPart1.sh`, which submit
     - **AMBIGUOUS** (75–90 %)
     - **LIKELY DIFFERENT PATIENTS** (< 75 %)
   - *Notes*: Requires `cyvcf2` and `numpy` (available via the `Tools/ENV` virtualenv). Called automatically by `run_concordance.sh`; can also be run standalone for ad-hoc comparisons.
+
+---
 
 - **sendSamplesToGeneYX.py** *(legacy — currently handled by postprocessPart1.sh)*
   - *Usage*:
