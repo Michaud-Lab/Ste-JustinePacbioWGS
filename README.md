@@ -1,6 +1,6 @@
 # Ste-JustinePacbioWGS
 
-PacBio long-read Whole Genome Sequencing data processing, including Pre-analysis, WGS Analysis, and Post-analysis.
+PacBio long-read Whole Genome Sequencing data processing, including [Pre-analysis](Preanalysis/README.md), WGS [Analysis](Analysis/README.md), and [Post-analysis](Postanalysis/README.md).
 
 We describe here a workflow for analyzing and processing data received from the Revio PacBio sequencer acquired by the CHU Sainte-Justine. All scripts are designed to run on the Digital Research Alliance of Canada clusters (Narval, Rorqual, Fir).
 
@@ -54,39 +54,49 @@ The config file follows this format. See `configTemplate.json` for a template. T
 
 ```json
 {
-    "Emedgene": {
-        "username": "XXX",
-        "password": "YYY",
-        "endpoint": "https://chusaintejustine.emedgene.com"
-    },
-    "GeneYX": {
-        "server": "https://analysis.geneyx.com",
-        "apiUserId": "XXX",
-        "apiUserKey": "YYY"
-    },
-    "Paths": {
-        "run_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/",
-        "ref_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.ref_map.v2p0p0.tsv",
-        "sample_sheet_path": "/home/felixant/scratch/SampleSheet/",
-        "output_path": "/home/felixant/scratch/Outputs",
-        "tertiary_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.tertiary_map.v2p0p0.tsv",
-        "miniwdl_cfg": "/home/felixant/scratch/Ste-JustinePacbioWGS/Analysis/miniwdl.cfg",
-        "s3_folder": "/home/felixant/scratch/S3-Storage"
-    },
-    "Transfers": {
-        "source_cluster": "Rorqual",
-        "source_run_path": "/home/felixant/links/projects/rrg-rallard/shared/PacBioDataRorqual/SequencerData",
-        "source_endpoint": "Globus UUID",
-        "source_collection": "Globus UUID",
-        "working_cluster": "Fir",
-        "working_endpoint": "Globus UUID",
-        "working_collection": "Globus UUID",
-        "identity_file": "/home/felixant/.ssh/FirInteractive",
-        "destination_cluster": "Narval",
-        "destination_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/OutputFamilies/",
-        "destination_endpoint": "Globus UUID",
-        "destination_collection": "Globus UUID"
-    }
+	"Emedgene":
+		{
+			"username":"XXX",
+			"password":"YYY",
+			"endpoint":"https://chusaintejustine.emedgene.com"
+		},
+	"GeneYX":
+		{
+			"server": "https://analysis.geneyx.com",
+			"apiUserId": "XXX",
+			"apiUserKey": "YYY"
+		},
+	"Phenotips":
+		{
+			"database_tsv": "/home/felixant/links/scratch/phenotips_database.tsv"
+		},
+	"Paths":
+		{
+			"run_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/",
+			"ref_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.ref_map.v2p0p0.tsv",
+			"sample_sheet_path": "/home/felixant/scratch/SampleSheet/",
+			"output_path": "/home/felixant/scratch/Outputs",
+			"tertiary_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.tertiary_map.v2p0p0.tsv",
+			"miniwdl_cfg": "/home/felixant/scratch/Ste-JustinePacbioWGS/Analysis",
+			"s3_folder": "/home/felixant/scratch/S3-Storage",
+			"bioinfo_excel": "/home/felixant/links/scratch/Ste-JustinePacbioWGS/Bioinfo-LR_SampleData.xlsx",
+			"sharepoint_list": "/home/felixant/links/scratch/Ste-JustinePacbioWGS/ListePRAGMatIQ.csv"
+		},
+	"Transfers":
+		{
+			"source_cluster": "Rorqual",
+			"source_run_path": "/home/felixant/links/projects/rrg-rallard/shared/PacBioDataRorqual/SequencerData",
+			"source_endpoint": "Globus UUID",
+			"source_collection": "Globus UUID",
+			"working_cluster": "Fir",
+			"working_endpoint": "Globus UUID",
+			"working_collection": "Globus UUID",
+			"identity_file": "/home/felixant/.ssh/FirInteractive",
+			"destination_cluster": "Narval",
+			"destination_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/OutputFamilies/",
+			"destination_endpoint": "Globus UUID",
+			"destination_collection": "Globus UUID"
+		}
 }
 ```
 
@@ -101,6 +111,12 @@ The config file follows this format. See `configTemplate.json` for a template. T
 | `output_path` | Directory where the WGS pipeline writes results, organized by family/sample ID |
 | `miniwdl_cfg` | Path to the miniwdl config file |
 | `s3_folder` | Local staging folder for files to be synced to S3 / Narval |
+| `bioinfo_excel` | Path to the bioinfo excel sheet (taken from [here](https://msss365.sharepoint.com/:x:/r/teams/CHUSJ-Projet_PacBio_LongRead/Documents%20partages/Bioinfo-LR_SampleData.xlsx?d=w4b851b2bbb084f239930f8eb7988ba61&csf=1&web=1&e=acDBQt)). Used by Preanalysis scripts|
+| `sharepoint_list` | Path to the Pragmatiq sharepoint. () Used to get the study attribute for Samples and getStudy.py |
+
+> [!NOTE]
+> For `bioinfo_excel` and `sharepoint_list`, it is impossible to download them directly from the alliance clusters (the API blocks access).
+> Therefore, you need to download the files locally from the URLs, then upload them to the alliance, for example with a scp command (see [Pre-analysis](Preanalysis/README.md) for an example.)
 
 ### Transfers fields
 
