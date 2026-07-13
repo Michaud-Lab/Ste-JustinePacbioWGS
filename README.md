@@ -6,13 +6,14 @@ We describe here a workflow for analyzing and processing data received from the 
 
 ## Data processing overview
 
-![Diag](https://github.com/user-attachments/assets/488dfa31-3974-43fd-ba15-68190e756015)
+<img width="1245" height="705" alt="image" src="https://github.com/user-attachments/assets/e573d5d5-eaaa-42f7-9b5d-ed84d0c9ab9c" />
+
 
 Once out of the sequencer, the long-read sequencing data is automatically transferred to an in-house SMRTLink server for temporary storage. Since storage and computing resources are limited on this server, we transfer the data to a cluster of the Alliance, [Rorqual](https://docs.alliancecan.ca/wiki/Rorqual).
 
 <img width="809" height="1055" alt="General_Steps_Flowchart" src="https://github.com/user-attachments/assets/5c2e1cac-0c28-4f80-8731-165f79da92dd" />
 
-From there, we pre-process the data with the scripts in [Preanalysis/](Preanalysis/README.md). The analysis itself is done using PacBio's [WGS pipeline](https://github.com/PacificBiosciences/HiFi-human-WGS-WDL) — our fork lives in [Analysis/HiFi-human-WGS-WDL/](https://github.com/FelixAntoineLeSieur/HiFi-human-WGS-WDL) and contains minor changes to make the pipeline usable on Alliance clusters. Once analysis is complete, post-processing steps (QC, tertiary upload, transfer) are described in [Postanalysis/](Postanalysis/README.md).
+From there, we pre-process the data with the scripts in [Preanalysis/](Preanalysis/README.md). The analysis itself is done using PacBio's [WGS pipeline](https://github.com/PacificBiosciences/HiFi-human-WGS-WDL) — our fork lives in [Analysis/HiFi-human-WGS-WDL/](https://github.com/FelixAntoineLeSieur/HiFi-human-WGS-WDL) and contains minor changes to make the pipeline usable on Alliance clusters. It is performed on [Fir](https://docs.alliancecan.ca/wiki/Fir) rather than Rorqual because it is much faster. Once analysis is complete, post-processing steps (QC, tertiary upload, transfer) are described in [Postanalysis/](Postanalysis/README.md).
 
 ## Documentation
 
