@@ -1,275 +1,132 @@
 # Ste-JustinePacbioWGS
-Pacbio long read Whole Genome sequencing data processing, including Preanalysis, WGS Analysis and Post-analysis
 
+PacBio long-read Whole Genome Sequencing data processing, including Pre-analysis, WGS Analysis, and Post-analysis.
 
-We describe here a workflow for analyzing and processing data received from the Revio PacBio sequencer acquired by the CHU Sainte-Justine. 
-Note that all of these scripts are meant to be run on the Digital Research Alliance of Canada clusters (Narval, Rorqual, Fir).
+We describe here a workflow for analyzing and processing data received from the Revio PacBio sequencer acquired by the CHU Sainte-Justine. All scripts are designed to run on the Digital Research Alliance of Canada clusters (Narval, Rorqual, Fir).
 
-## Data processing
+## Data processing overview
+
 ![Diag](https://github.com/user-attachments/assets/488dfa31-3974-43fd-ba15-68190e756015)
-Once out of the sequencer, the long-read sequencing data is automatically transfered on a in-house smrtlink server, for temporary storage. 
-Since storage and computing resources are limited on this server, we transfer the data to a cluster of the Alliance, [Narval](https://docs.alliancecan.ca/wiki/Narval).
-\
-\
+
+Once out of the sequencer, the long-read sequencing data is automatically transferred to an in-house SMRTLink server for temporary storage. Since storage and computing resources are limited on this server, we transfer the data to a cluster of the Alliance, [Rorqual](https://docs.alliancecan.ca/wiki/Rorqual).
+
 <img width="809" height="1055" alt="General_Steps_Flowchart" src="https://github.com/user-attachments/assets/5c2e1cac-0c28-4f80-8731-165f79da92dd" />
-\
-\
-From there, we pre-process the data with the scripts included here in [Preanalysis](#Pre-analysis). Then, the analysis itself is done using PacBio's [WGS pipeline](https://github.com/PacificBiosciences/HiFi-human-WGS-WDL). Note that I have my own fork of this pipeline [here](https://github.com/FelixAntoineLeSieur/HiFi-human-WGS-WDL), which should be included here as a submodule in [Analysis](#analysis). It contains some minor changes aimed at making the pipeline usable in the Alliance environment.
-\
-Once the data has been processed by the WGS pipeline, we want to setup tertiary analysis, primarily through the GeneYX website, though different analysis and reports will likely be added later. 
-This will described here in [Postanalysis](#post-analysis)
 
-## Requirements
-Using the scripts here requires access to GeneYX and Emedgene. Access information and paths must be defined in the [config](#config) (by default named .myconf.json). \
-All Python dependencies are consolidated in `Tools/requirements.txt`. These versions are pinned for the Alliance Clusters (`+computecanada` suffix). \
-If you use a python script, you must load the requirements manually: \
-To set up the environment on an Alliance cluster: \
-1-	module load python/3.11 scipy-stack/2026a \
-2-	virtualenv --no-download Tools/ENV \
-3-  source Tools/ENV/bin/activate \
-4-  pip install --no-index --upgrade pip \
-5-  pip install -r Tools/requirements.txt \
-6-  cp Analysis/exec_script.sh Tools/ENV/lib/python3.11/site-packages/miniwdl_slurm/scripts/exec_script.sh \
-(This last step replaces the native exec_script.sh for one that uses $SLURM_TMPDIR. This helps execution time and general efficiency of tasks on the Alliance Clusters)
-\
-Meanwhile, most bash scripts (globus get and send, postprocessPart1.sh) that needs these requirements will install them manually in Tools/ENV when you run them for the first time. \
+From there, we pre-process the data with the scripts in [Preanalysis/](Preanalysis/README.md). The analysis itself is done using PacBio's [WGS pipeline](https://github.com/PacificBiosciences/HiFi-human-WGS-WDL) — our fork lives in [Analysis/HiFi-human-WGS-WDL/](https://github.com/FelixAntoineLeSieur/HiFi-human-WGS-WDL) and contains minor changes to make the pipeline usable on Alliance clusters. Once analysis is complete, post-processing steps (QC, tertiary upload, transfer) are described in [Postanalysis/](Postanalysis/README.md).
 
-### Files and directories
-My fork of the analysis pipeline is available [here](https://github.com/FelixAntoineLeSieur/HiFi-human-WGS-WDL) and includes installation instruction. \
+## Documentation
 
-We need the input files which are contained in the **run_path** given in the config. \
-**run path** is a directory containing all the runs separated by run ID, as obtained by the Revio sequencer. This ID follows: r84196_{run_Start_Date}_{run_Start_Time}. Each of these folders contain subdirectories for each sequencing plate (1_A01, 1_B01...), each representing a single sample. Samples are further divided in subdirectories containing data related to the sample, the ones required by the scripts are in the subdirectories hifi_reads (contains the HiFi reads in unaligned BAM format), pb_format (contains metadata related to the sample, including the sample_name) \
-**ref_path** is usually included in the HiFi-human-WGS-WDL pipeline as a template, in which the user must set paths to a resource bundle available here:\
-[<img src="https://zenodo.org/badge/DOI/10.5281/zenodo.14027047.svg" alt="10.5281/zenodo.14027047">](https://zenodo.org/records/14027047) \
-**tertiary_maps** is generated in a similar way to ref_path. \
-**sample_sheet_path** is the link to the directory that will contain the pipeline samplesheets (in .json) and the batch files (in .txt).\
-**output_path** is the directory where the WGS pipeline writes its results, organized by family or sample ID.\
-**sample_list** is the CSV file that contains the metadata of samples retrieved by Preanalysis/getSamples.py.  All desired samples must be in this list before the sample sheets can be generated by Preanalysis/singletonSampleSheet or Preanalysis/jointCallSampleSheet.py See more about the format [here](#sample-list)\
-**s3-folder** certain files are extracted to be sent to S3. For this we design a folder where we will send every file that must be copied to s3.
- 
+| Section | Description |
+|---------|-------------|
+| [Pre-analysis](Preanalysis/README.md) | Retrieve sample metadata, generate samplesheets, download runs from Rorqual |
+| [Analysis](Analysis/README.md) | Run the WGS pipeline with miniwdl |
+| [Post-analysis](Postanalysis/README.md) | Upload to GeneYX, QC reports, concordance checks, cleanup and transfer to Narval |
 
+---
 
-### Config
-The config file follows this format, see `configTemplate.json`:
+## Running the scripts
+
+All Python dependencies are consolidated in `Tools/requirements.txt`. Versions are pinned for the Alliance clusters (`+computecanada` suffix).
+To download the repo and its submodules:
+```bash
+git clone --recurse-submodules https://github.com/Michaud-Lab/Ste-JustinePacbioWGS.git
+```
+To set up the environment on an Alliance cluster:
+
+```bash
+module load python/3.11 scipy-stack/2026a
+virtualenv --no-download Tools/ENV
+source Tools/ENV/bin/activate
+pip install --no-index --upgrade pip
+pip install -r Tools/requirements.txt
+cp Analysis/exec_script.sh Tools/ENV/lib/python3.11/site-packages/miniwdl_slurm/scripts/exec_script.sh
+```
+
+The last step replaces the native miniwdl-slurm exec script with one that uses `$SLURM_TMPDIR`, improving execution time and I/O efficiency on Alliance clusters.
+
+Most bash scripts (`globus_get_run.sh`, `postprocessPart1.sh`, etc.) will install `Tools/ENV` automatically on first run if it does not exist.
+
+---
+
+## Config
+
+The config file follows this format. See `configTemplate.json` for a template. The default location is `.myconf.json` at the root of the repo. Use `-c` to supply an alternate path for any script.
+
 ```json
 {
-	"Emedgene":
-		{
-			"username":"XXX",
-			"password":"YYY",
-			"endpoint":"https://chusaintejustine.emedgene.com"
-		},
-	"GeneYX":
-		{
-			"server": "https://analysis.geneyx.com",
-			"apiUserId": "XXX",
-			"apiUserKey": "YYY"
-		},
-	"Paths":
-		{
-			"run_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/",
-			"ref_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.ref_map.v2p0p0.tsv",
-			"sample_sheet_path": "/home/felixant/scratch/SampleSheet/",
-			"output_path": "/home/felixant/scratch/Outputs",
-			"tertiary_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.tertiary_map.v2p0p0.tsv",
-			"miniwdl_cfg": "/home/felixant/scratch/Ste-JustinePacbioWGS/Analysis/miniwdl.cfg",
-			"s3_folder": "/home/felixant/scratch/S3-Storage"
-		},
-	"Transfers":
-		{
-			"source_cluster": "Rorqual",
-			"source_run_path": "/home/felixant/links/projects/rrg-rallard/shared/PacBioDataRorqual/SequencerData",
-			"source_endpoint": "Globus UUID",
-			"source_collection": "Globus UUID",
-			"working_cluster": "Fir",
-			"working_endpoint": "Globus UUID",
-			"working_collection": "Globus UUID",
-			"identity_file": "/home/felixant/.ssh/FirInteractive",
-			"destination_cluster": "Narval",
-			"destination_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/OutputFamilies/",
-			"destination_endpoint": "Globus UUID",
-			"destination_collection": "Globus UUID"
-		}
+    "Emedgene": {
+        "username": "XXX",
+        "password": "YYY",
+        "endpoint": "https://chusaintejustine.emedgene.com"
+    },
+    "GeneYX": {
+        "server": "https://analysis.geneyx.com",
+        "apiUserId": "XXX",
+        "apiUserKey": "YYY"
+    },
+    "Paths": {
+        "run_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/",
+        "ref_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.ref_map.v2p0p0.tsv",
+        "sample_sheet_path": "/home/felixant/scratch/SampleSheet/",
+        "output_path": "/home/felixant/scratch/Outputs",
+        "tertiary_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.tertiary_map.v2p0p0.tsv",
+        "miniwdl_cfg": "/home/felixant/scratch/Ste-JustinePacbioWGS/Analysis/miniwdl.cfg",
+        "s3_folder": "/home/felixant/scratch/S3-Storage"
+    },
+    "Transfers": {
+        "source_cluster": "Rorqual",
+        "source_run_path": "/home/felixant/links/projects/rrg-rallard/shared/PacBioDataRorqual/SequencerData",
+        "source_endpoint": "Globus UUID",
+        "source_collection": "Globus UUID",
+        "working_cluster": "Fir",
+        "working_endpoint": "Globus UUID",
+        "working_collection": "Globus UUID",
+        "identity_file": "/home/felixant/.ssh/FirInteractive",
+        "destination_cluster": "Narval",
+        "destination_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/OutputFamilies/",
+        "destination_endpoint": "Globus UUID",
+        "destination_collection": "Globus UUID"
+    }
 }
 ```
 
-Where the username and password are specified for each platform and the paths to the following are described in the [previous section](#files-and-directories) \
-The "Transfers" part is used by the Preanalysis `globus_get_run.sh` and Postanalysis `globus_cli_send.sh`. See the specific script sections for details. 
-Also, if you need to send the data elsewhere, I highly recommend that you use the automation nodes, which you will need to create a ssh key for. The private key must be included in config to make use of the automation node. \
-Alternatively, one option is to use globus, like the scripts described here. \ \
-Instructions to use the automation nodes can be found [here](https://msss365-my.sharepoint.com/:p:/g/personal/nicolas_perrot_hsj_ssss_gouv_qc_ca/IQBk4eS7U82LS7RY-GDUzAotAb5FslgG8GfcCOw3VRsNF0s?e=3xbdHn )
+### Path fields
 
-### Sample List
-The sample list gets built automatically when the script Preanalysis/getSamples.py gets used on a run ID. Data from all samples contained in that run are written in the list (by default named mySampleList.txt). The goal of this list is to save the information of samples from multiple runs without having to later reobtain the data from the Emedgene and Phenotips API. \
-The information contained in the list is formatted like this (no header):
+| Field | Description |
+|-------|-------------|
+| `run_path` | Directory containing raw runs from the Revio sequencer, organized as `{run_id}/{plate}/{sample}/` |
+| `ref_maps` | Path to the WGS pipeline reference map TSV (from the resource bundle at [Zenodo 14027047](https://zenodo.org/records/14027047)) |
+| `tertiary_maps` | Path to the WGS pipeline tertiary map TSV |
+| `sample_sheet_path` | Directory where samplesheets (`.json`) and batch files (`.txt`) are written |
+| `output_path` | Directory where the WGS pipeline writes results, organized by family/sample ID |
+| `miniwdl_cfg` | Path to the miniwdl config file |
+| `s3_folder` | Local staging folder for files to be synced to S3 / Narval |
+
+### Transfers fields
+
+The `Transfers` section is used by `Preanalysis/globus_cli_get_run.sh` and `Postanalysis/globus_cli_send.sh`. It describes the three clusters in the workflow:
+
+- **Source** (Rorqual): where raw sequencer data lands first
+- **Working** (Fir): where analysis and post-processing run
+- **Destination** (Narval): long-term storage for processed outputs
+
+`identity_file` is the private SSH key for the automation/robot node. When present, scripts can transfer files without interactive password entry. Instructions for setting up the robot node are [here](https://msss365-my.sharepoint.com/:p:/g/personal/nicolas_perrot_hsj_ssss_gouv_qc_ca/IQBk4eS7U82LS7RY-GDUzAotAb5FslgG8GfcCOw3VRsNF0s?e=3xbdHn).
+
+---
+
+## Sample list
+
+The sample list is built automatically when `Preanalysis/getSamples.py` is run on a run ID. Data for all samples in that run are appended to the list (default: `mySampleList.txt`). The list stores sample metadata across multiple runs to avoid repeated API calls.
+
+Format (no header, semicolon-separated):
+
 ```
 {sample_name};{plate_name};{barcode};{runID};{Gender};{Singleton|Duo|Trio};{Proband|mother of {probandID}|father of {probandID}};{HPOList};{path_to_bam};{Affected? True|False}
-GM1XXX;2_B01;2002;r84196_XXX;Male;Duo;proband;HP:0000XXX,HP:000YYY;{path_to_bam};True
-GM2XXX;2_C01;2003;r84196_XXX;Female;Duo;mother of GM1XXX;;{path_to_bam};False
-GM3XXX;2_D01;2004;r84196_YYY;Female;Duo;proband;HP:0000XXX;{path_to_bam};True
+GM1XXX;2_B01;2002;r84196_XXX;Male;Duo;proband;HP:0000XXX,HP:000YYY;/path/to/bam;True
+GM2XXX;2_C01;2003;r84196_XXX;Female;Duo;mother of GM1XXX;;/path/to/bam;False
 ```
-\
->[!NOTE]
->For the following, note that for most scripts you can use -c to supply an alternate config file name. Otherwise the default name is ".myconf.json".\
->Some scripts will also use default values for paths, such as "mySampleList.txt" for most Pre-analysis steps
 
-## Pre-analysis
-The goal of the pre-analysis is to obtain metadata for the samples contained in the desired run, choose which runs to analyze, gather the necessary files for analysis and generate sample sheets to be used as inputs for the Analysis pipeline. \
-Initial runs from the Pacbio sequencer are usually sent to Rorqual first for storage. As such, in the config we consider Rorqual to be the "Source" cluster. \
-On the source cluster, we can run `getSamples.py` with the run name, which will automatically add all samples of this run to the [Sample List](#sample-list).
-Samples from this list are usually added to the [Bioinfo Excel sheet](https://msss365.sharepoint.com/:x:/r/teams/CHUSJ-Projet_PacBio_LongRead/Documents%20partages/Bioinfo-LR_SampleData.xlsx?d=w4b851b2bbb084f239930f8eb7988ba61&csf=1&web=1&e=IpObDK).\
-The Excel sheet is also the input for `extractFamilies.py`, which infers new family groupings from proband/parent role metadata.
+Samples from this list are usually also recorded in the [Bioinfo Excel sheet](https://msss365.sharepoint.com/:x:/r/teams/CHUSJ-Projet_PacBio_LongRead/Documents%20partages/Bioinfo-LR_SampleData.xlsx?d=w4b851b2bbb084f239930f8eb7988ba61&csf=1&web=1&e=IpObDK), which is the input for `Preanalysis/extractFamilies.py`.
 
-The analysis itself is usually done on the "Working" cluster (Fir). \
-Once a family has been selected for analysis, use `globus_get_run.sh` to download files from the source cluster via Globus.
-After the download, the same script will call `getSamples.py` and either `singletonSampleSheet.py` or `jointCallSampleSheet.py` to generate the sample sheet for the requested samples. \
-
----
-
-- **getSamples.py**
-	- *Usage*: ```python3 Preanalysis/getSamples.py -r {run_id} [-l sample_list] [-c config]```
-	- *Goal*: Retrieves sample metadata from Emedgene for all wells of a given run and appends them to the sample list. Precursor script to all samplesheet-writing scripts.
-	- *Outputs*: Prints sample information (name, gender, family status, HPO terms) to stdout and appends rows to the sample list file (default: `mySampleList.txt`).
-
-- **extractFamilies.py**
-	- *Usage*: ```python3 Preanalysis/extractFamilies.py (-x bioinfo.xlsx | --feuil1 Feuil1.csv --familles Familles.csv) [-o output_dir]```
-	- *Goal*: Reads unclassified samples (`sing_trio_duo == "ToConfirm"`, no family assigned yet) from the Bioinfo Excel sheet and groups them into families based on role (proband / mother of / father of) and étude metadata. Assigns new family names (`p001`, `p002`, …) continuing from the highest existing number in the Familles sheet.
-	- *Inputs*: Either the full Bioinfo Excel file via `-x` (extracts the **Feuil1** and **Familles** sheets automatically) or two pre-exported semicolon-separated CSVs via `--feuil1` / `--familles`.
-	- *Outputs*: Three files written to the output directory (default: current directory):
-		1. `Feuil1_updated.csv` — original Feuil1 with the `Trio` column filled in for newly assigned samples
-		2. `Familles_updated.csv` — original Familles with new family rows appended
-		3. `skipped_report.csv` — samples excluded due to missing étude, unrecognised role, or absent proband, with a reason column
-
-- **getStudy.py**
-	- *Usage*: ```python3 Preanalysis/getStudy.py -s {line_separated_id_list} -p {pragmatiq_csv}```
-	- *Goal*: Cross-references a line-separated list of specimen IDs against a Pragmatiq CSV downloaded from SharePoint to extract study group (cohort) information. Useful for filling in étude columns in the Bioinfo Excel sheet.
-	- *Outputs*: Writes a filtered table (specimen ID, proband ID, father ID, mother ID, comments, cohort) to stdout, followed by a cohort-only summary.
-
-- **getHPOtermsFromList.py**
-	- *Usage*: ```python3 Preanalysis/getHPOtermsFromList.py {sample_name_list}```
-	- *Goal*: Retrieves HPO terms from Phenotips for each sample in a line-separated name list, using the Emedgene API as an intermediary to resolve the Phenotips patient ID.
-	- *Outputs*: Prints progress to stdout and writes one HPO term string per sample (semicolon-separated) to `returnHPO.txt`.
-
-- **singletonSampleSheet.py**
-	- *Usage*: ```python3 Preanalysis/singletonSampleSheet.py -p {proband_name} [-l sample_list] [-c config]```
-	- *Goal*: Samplesheet-writing script for singletons. Reads the sample's metadata from the sample list and generates a WDL-compatible JSON samplesheet. Required before running the Analysis pipeline.
-	- *Outputs*: Two files written to `sample_sheet_path`:
-		1. `{run_id}_{well}_{sample_name}.json` — WDL pipeline samplesheet
-		2. `{run_id}_samples` — text file listing all samples from this run for which a singleton samplesheet was generated (used to batch-launch the pipeline)
-
-- **jointCallSampleSheet.py**
-	- *Usage*: ```python3 Preanalysis/jointCallSampleSheet.py -p {proband_name} -n {family_name} [-f {father_name}] [-m {mother_name}] [-l sample_list] [-c config]```
-	- *Goal*: Samplesheet-writing script for families (duos, trios). Reads metadata for each member from the sample list and generates the joint-call WDL samplesheet. Required before running the Analysis pipeline on a family.
-	- *Outputs*: Two files written to `sample_sheet_path`:
-		1. `{family_name}.json` — WDL joint-call samplesheet
-		2. `{run_id}_samples` — batch list of samples from this run
-
-- **globus_get_run.sh** *(not yet committed)*
-	- *Usage*: ```bash Preanalysis/globus_get_run.sh -i {run_id} [-c config]```
-	- *Goal*: Downloads a run from the source cluster (Rorqual) to the working cluster (Fir) via Globus, then automatically calls `getSamples.py` and the appropriate samplesheet script. Reads cluster endpoints and paths from the `Transfers` section of the config.
-
----
-
-### Helper modules
-
-These files are imported by the scripts above and are not meant to be called directly.
-
-| Module | Purpose |
-|--------|---------|
-| `Preanalysis/Sample.py` | Data class representing a single sequenced sample, including BAM path, metadata and samplesheet-writing methods. |
-| `Preanalysis/Family.py` | Data class representing a family grouping, wrapping multiple Sample objects and providing joint-call samplesheet-writing logic. |
-| `Preanalysis/Emedgene.py` | API client for the Emedgene platform: resolves sample names to EMG IDs and retrieves Phenotips patient IDs and HPO terms. |
-| `Preanalysis/Qlin.py` | API client for the Qlin LIMS platform: authenticates and returns a bearer token. Requires a `Qlin` section in the config (`email`, `password`, `url`)  -- **Not yet implemented: Qlin API is only usable with a VPN, not from the alliance clusters** -- |
-
-## Analysis
-This section is about running the actual WGS pipeline using the sample sheets created in the previous section. The pipeline submodule lives in `Analysis/HiFi-human-WGS-WDL/`.
-
-- **tmuxLaunchTrio.sh**
-	- *Usage*: ```bash Analysis/tmuxLaunchTrio.sh -i {family_or_sample_ID} [-c config]```
-	- *Goal*: Launches the WGS pipeline (`miniwdl run`) for a given family or sample in a **detached tmux session**, so the run survives SSH disconnections. Reads the samplesheet path, miniwdl config, and output directory from the config file.
-	- *Outputs*: A tmux session named `{family_or_sample_ID}` with the pipeline running. Pipeline outputs are written to `output_path/{family_or_sample_ID}/`.
-
-## Post-analysis
-Once WGS pipeline outputs are available, the post-analysis phase uploads data to tertiary analysis platforms and generates variant-level reports.
-
----
-
-- **sendSamplesToGeneYX.py**
-	- *Usage*:
-		- Family: ```python3 Postanalysis/sendSamplesToGeneYX.py -r {family_run_list} -f [-g {group}] [-c config]```
-		- Singleton: ```python3 Postanalysis/sendSamplesToGeneYX.py -r {singleton_run_list} -s [-g {group}] [-c config]```
-	- *Goal*: Main GeneYX upload script. For each sample in the run list, locates the WGS pipeline output VCFs (small variants, structural variants, tandem repeats, CNV) in `output_path/_LAST/outputs.json`, merges them into a single unified VCF using `PacBioUnifyVcf`, and sends the case to GeneYX. Optionally assigns the uploaded samples to a study group.
-	- *Inputs*: A run list file. **Family format** (one header line then one `role:sampleName,BAMpath` per member):
-		```
-		pXXX,pXXX.json
-		proband:GMXXXXX,/path/to/bam
-		mother:GMYYYYY,/path/to/bam
-		father:GMZZZZZ,/path/to/bam
-		```
-		**Singleton format** (one `sampleName,samplesheet.json,BAMpath[,group]` per line):
-		```
-		GMXXXXX,GMXXXXX.json,/path/to/bam,validation
-		```
-	- *Outputs*: Unified VCF files written to `output_path/{sample_name}-unifiedVCF.vcf.gz` and cases uploaded to GeneYX.
-
-- **postprocessPart1.sh**
-	- *Goal*: Shell wrapper that orchestrates the first post-processing steps after the WGS pipeline completes: extracting output paths, running QC tools, running Somalier, PEDDY, and MultiQC as well as preparing files for upload and transfer
-
-- **outputs_Json.sh**
-	- *Goal*: Helper script that parses the miniwdl `outputs.json` to extract resolved file paths for downstream scripts.
-
-- **globus_cli_send.sh**
-	- *Usage*: ```bash Postanalysis/globus_cli_send.sh [-c config]```
-	- *Goal*: Transfers processed output files (unified VCFs, QC reports) from the working cluster (Fir) to the destination cluster (Narval) via Globus. Reads source/destination endpoints and paths from the `Transfers` section of the config.
-
-- **cleanup.sh**
-	- *Goal*: Removes intermediate files generated during analysis and post-processing to free up scratch space, keeping only the final outputs and reports.
-
-- **send_Symlinks_Narval.sh**
-	- *Goal*: Creates symlinks on Narval pointing to the transferred output files, making them accessible under a consistent directory structure for downstream users.
-
-- **run_concordance.sh**
-	- *Usage*: `sbatch Postanalysis/run_concordance.sh -n <sample_name> -v <lr_snv_vcf> -o <output_dir> [-f <fasta>] [-t <tools_folder>] [-l <log_file>]`
-	- *Goal*: Verifies that a PacBio long-read VCF and its matching Illumina short-read GVCF originate from the same patient, by computing genotype concordance across shared SNV sites (expected ≥ 90 % for same-patient pairs). Also runs a secondary hard-coded 44-SNP fingerprint check using `bcftools isec` for a quick sanity confirmation.
-	- *Inputs*:
-		- `-n`: Sample name — used to locate the Illumina GVCF on the staging server (`staging_juno:/pragmatiq-staging-sd4h/data/<sample_name>/`)
-		- `-v`: Normalized PacBio SNV VCF (`.vcf.gz`), typically produced by `postprocessPart1.sh`
-		- `-o`: Output directory; results are written under `<output_dir>/Concordance/`
-	- *Outputs* (written to `<output_dir>/Concordance/`):
-		- `concordance_report_<sample>.txt` — full genotype concordance report from `sr-lr_vcf_concordance.py`
-		- `Isec/<sample>_summary.txt` — 44-SNP position summary
-		- `Isec/<sample>_report.txt` — list of mismatched positions (empty if none)
-	- *Notes*: Downloads the GVCF from the staging server via `rclone` (requires `staging_juno` remote to be configured). Converts the GVCF to a VCF with GATK `GenotypeGVCFs` before comparison. Skips gracefully if the GVCF is not found on the staging server. The 44-SNP BED file is expected at `$SCRATCH/SNPs44.bed`.
-
-- **sr-lr_vcf_concordance.py**
-	- *Usage*: `python3 Postanalysis/sr-lr_vcf_concordance.py --vcf1 <lr.vcf.gz> --vcf2 <sr.vcf.gz> [--min-gq 20] [--min-dp 8] [--output report.txt]`
-	- *Goal*: Compares two VCFs (typically PacBio/DeepVariant vs. Illumina/GATK) and produces a cross-platform SNV concordance report to confirm they come from the same patient.
-	- *Inputs*: Two VCF or VCF.gz files (one per platform). Filters applied by default: PASS variants only, SNVs only, GQ ≥ 20, DP ≥ 8.
-	- *Outputs*: Prints a formatted report to stdout (with ANSI colour); optionally writes it to a file via `--output`. The report includes variant counts, shared-site intersection, a genotype confusion matrix, a Jaccard index, and a verdict:
-		- **SAME PATIENT** (≥ 90 % concordance on shared SNVs)
-		- **AMBIGUOUS** (75–90 %)
-		- **LIKELY DIFFERENT PATIENTS** (< 75 %)
-	- *Notes*: Requires `cyvcf2` and `numpy` (available via the `Tools/ENV` virtualenv). Called automatically by `run_concordance.sh`; can also be run standalone for ad-hoc comparisons.
-
----
-
-### Not-yet-implemented modules
-
-| Module | Purpose |
-|--------|---------|
-| `Postanalysis/GeneYX.py` | API client for GeneYX: authentication, VCF unification (`unify_vcfs`), group assignment (`group_assign`). Imported by `sendSamplesToGeneYX.py` and `assignListToGeneYXGroup.py`. |
-| `Postanalysis/sendSamplesToGeneYX.py` | Main GeneYX upload script. For each sample in the run list, locates the WGS pipeline output VCFs (small variants, structural variants, tandem repeats, CNV) in `output_path/_LAST/outputs.json`, merges them into a single unified VCF using `PacBioUnifyVcf`, and sends the case to GeneYX. Optionally assigns the uploaded samples to a study group -- **curently handled by postprocessPart1.sh and GeneYX submodule** -- |
-| `Postanalysis/getSampleListFromGeneYX.py` | Retrieves the full sample list from GeneYX and writes it to `allGeneYXSampleList.json`. **Note**: uses a hardcoded config path; intended for one-off administrative queries rather than routine use. |
-| `Postanalysis/filter_parents.py` | Single-pass filter for joint-called trio VCFs (GLNexus / DeepVariant). |
-| `Postanalysis/assignListToGeneYXGroup.py` | Assigns a list of samples to a GeneYX study group. Cross-references the provided name list against a CSV export of GeneYX's full VCF list |
-
-## Quality Control Tools
-The `Tools/` directory contains Apptainer-based wrappers for QC tools that can be run independently at any point in the workflow. Each tool has a `*call_from_image.sh` launcher script and a corresponding `.def` Apptainer definition file.
-
-| Tool | Purpose |
-|------|---------|
-| **Somalier** (`Tools/Somalier/`) | Sample-level relatedness and ancestry inference from VCF/BAM data. Used to verify family relationships declared in the sample sheet match the sequencing data. |
-| **Peddy** (`Tools/Peddy/`) | Sex inference and relatedness checking. Cross-validates pedigree structure against genotype data. |
-| **MultiQC** (`Tools/MultiQc/`) | Aggregates per-sample QC metrics from various tools (FastQC, samtools, etc.) into a single interactive HTML report. |
-| **SVTopo** (`Tools/SVTopo/`) | Structural variant topology visualization. Produces diagrams of complex SVs from the PacBio SV VCF, using a repeat-masker BED file (`repeatmaskerUCSC.bed.gz`) for annotation. |
-| **Triomix** (`Tools/Triomix/`) | Detects sample contamination or mix-up in trio data by testing for unexpected allele sharing between family members. |
+> [!NOTE]
+> For most scripts you can use `-c` to supply an alternate config file. Otherwise the default is `.myconf.json`. Some scripts also use a default sample list path (`mySampleList.txt`).
