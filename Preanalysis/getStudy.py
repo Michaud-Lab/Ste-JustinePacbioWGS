@@ -4,6 +4,8 @@ import sys
 
 def get_study_info(main_csv_path, specimen_list_path):
 	"""
+	This is a legacy script, rarely needed to be used now that this method was integrated in Sample.py
+	If you have several samples without Study, you could still use it. 
 	Reads a main CSV and a list of specimens, then prints selected columns
 	for the union of specimens found in both sources.
 
@@ -28,9 +30,36 @@ def get_study_info(main_csv_path, specimen_list_path):
 		filtered_df = filtered_df.drop_duplicates(subset=["Identifiant : Specimen"], keep="last")
 		for index, row in filtered_df.iterrows():
 			# Decodeur samples start with 'HSJ'
-			
+
 			if row["Identifiant : Specimen"].startswith("HSJ") :	
 				filtered_df.at[index,"Cohorte"] = "Decodeur"
+
+
+		# Detect specimens that matched more than one row in the main CSV
+		duplicate_counts = filtered_df.groupby("Identifiant : Specimen", sort=False).size()
+		print("Duplicates here")
+		print(duplicate_counts)
+		duplicates = duplicate_counts[duplicate_counts > 1]
+		if not duplicates.empty:
+			print(f"WARNING: {len(duplicates)} specimen(s) matched multiple rows in the dataset:", file=sys.stderr)
+			for specimen, count in duplicates.items():
+				cohorts = filtered_df.loc[filtered_df["Identifiant : Specimen"] == specimen, "Cohorte"].tolist()
+				cohorts_str = ", ".join(str(c) for c in cohorts)
+				print(f"  - {specimen}: {count} matches (Cohorts: {cohorts_str})", file=sys.stderr)
+
+ 
+
+		# Detect specimens from the list that were not found in the main CSV
+		missing_mask = filtered_df["Identifiant : Specimen"].isna()
+		missing_specimens = filtered_df.loc[missing_mask, "Identifiant : Specimen"].tolist()
+		if missing_specimens:
+			print(f"WARNING: {len(missing_specimens)} specimen(s) from the list were NOT found in the dataset:", file=sys.stderr)
+			for s in missing_specimens:
+				print(f"  - {s}", file=sys.stderr)
+		else:
+			print("All specimens from the list were found in the dataset.", file=sys.stderr)
+ 
+
 
 		# Define the columns to be printed
 		columns_to_print = [
@@ -48,9 +77,12 @@ def get_study_info(main_csv_path, specimen_list_path):
 		print("------Only cohorts------:")
 		only_cohort = filtered_df["Cohorte"]
 		print(f"Total specimens in list file: {specimens_to_find_df.shape[0]}")
-
 		print(f"Lines in filtered list: {only_cohort.shape[0]}")
-		only_cohort.to_csv(sys.stdout, index=False)
+		if only_cohort.shape[0] != specimens_to_find_df.shape[0]:
+			print(f"WARNING: The number of lines in the filtered list ({only_cohort.shape[0]}) does not match the number of specimens in the list file ({specimens_to_find_df.shape[0]}). This may indicate missing specimens or duplicates.", file=sys.stderr)
+		
+		else:
+			only_cohort.to_csv(sys.stdout, index=False)
 
 	except FileNotFoundError as e:
 		print(f"Error: File not found - {e}", file=sys.stderr)

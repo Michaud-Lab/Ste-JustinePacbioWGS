@@ -3,15 +3,24 @@ from pathlib import Path
 import subprocess
 import logging
 import glob
+import pandas as pd
 import json
 from Emedgene import Emedgene
 from configurator import Config
+import numpy as np
 
 class Sample:
 	"""
 	Sample object for patients. Eventually will be separated into Case Class and Sample Class
 	"""
-	def __init__(self, run_id, well, name="", bam_path="", fail_bam="", status={},HPOs="", config_file=os.path.expanduser(".myconf.json")):
+	def __init__(self, run_id, well, name="", bam_path="", fail_bam="", status={},HPOs="", study="",config_file=os.path.expanduser(".myconf.json")):
+		string_args = {"run_id": run_id, "well": well, "name": name, "bam_path": bam_path,
+			"fail_bam": fail_bam, "HPOs": HPOs, "study": study, "config_file": config_file}
+		for arg_name, arg_value in string_args.items():
+			if not isinstance(arg_value, str):
+				print(f"Error: argument '{arg_name}' must be of type str, got {type(arg_value).__name__} ({arg_value!r})", file=sys.stderr)
+				sys.exit(1)
+
 		self.run_id		=	run_id #ie r84196_20250224_170647
 		configs         = 	Config.from_path(config_file)
 		
@@ -23,13 +32,13 @@ class Sample:
 		self.sample_path=	self.runs_path + f"{run_id}/{well}"
 		
 
-		if len(bam_path) != 0:
+		if bam_path != "":
 			self.bam_path	=	bam_path
 		else:
 			self.bam_path	=	self.find_bam_path()
 
 		#Optionally, we can provide a failed reads bam for TR calling
-		if len(fail_bam) != 0:
+		if fail_bam != "":
 			self.fail_bam	=	fail_bam
 		else:
 			self.fail_bam	=	self.find_fail_bam()
@@ -38,13 +47,13 @@ class Sample:
 		self.barcode	=	self.bam_path.split("/")[-1].split("bc")[-1].removesuffix(".bam")
 		#Sometimes, the name from sequencing is not compatible with the Emedgene name, so it must be given manually.
 		#For example, we receive GMXXXX_redo or GMXXXX_new, while the Emedgene name should be GMXXXX 
-		if len(name) != 0:
+		if name != "":
 			self.name	=	name
 		else:
 			self.name	=	self.find_name()
 
 		#If status is pre-defined, we don't need to investigate emedgene
-		if len(status) != 0:
+		if status != {}:
 			self.case_status = status
 			emg_case_id = "skip"
 			self.phenotypes = ""
@@ -52,27 +61,31 @@ class Sample:
 		else:
 			emg_case_id	=	Emedgene(config_file=config_file).get_emg_id(self.name)
 			
-		#Does the patient belong to a trio, duo, or a singleton? Alse gender, family role and Affected status
+		#Does the patient belong to a trio, duo, or a singleton? Also gender, family role and Affected status
 		#if isinstance(self.emg_case_json,int):
 		if emg_case_id == "":
 			#If we get an int (error code) on Emedgene, we suppose it is likely a validation case, always singleton
-			self.case_status = {"Status": "Singleton", "Role":"proband", "Gender":"null", "Affected": True}
+			self.case_status = {"Status": "Singleton", "Role":"proband", "Gender":"", "Affected": True}
 			self.phenotypes = ""
 		elif emg_case_id != "skip":
 			emg_case_json	=	Emedgene(config_file=config_file).get_case_json(emg_case_id)
 			self.case_status =	self.find_status(emg_case_json)
 
-			pheno_case_id	=	Emedgene(config_file=config_file).get_pheno_id(json_file=(emg_case_json))
-			#I'm removing this temporarily, while Phenotips is deprecated
-			# if self.case_status["Affected"]:
-			# 	self.phenotypes		=	Emedgene(config_file=config_file).qlin_import_HPO_request(pheno_case_id)
-			# else:
-			# 	self.phenotypes		=	""
-			self.phenotypes		=	""
+			#Note: Our contract with phenotips is over so we retrieve phenotypes from the database TSV instead
+			pheno_case_id	=	Emedgene(config_file=config_file).get_pheno_id(sample=self.name,json_file=(emg_case_json))
+			if self.case_status["Affected"]:
+				self.phenotypes		=	Emedgene(config_file=config_file).phenotips_import_HPO_from_tsv(pheno_case_id)
+			else:
+				self.phenotypes		=	""
 		
 		#phenotype overrides if present
-		if len(HPOs) != 0:
+		if HPOs != "":
 			self.phenotypes = HPOs
+		if study == "":
+			sharepoint_list=configs.Paths.sharepoint_list
+			self.study = self.get_study_info(sharepoint_list)
+		else:
+			self.study = study
 
 	def find_bam_path(self):
 		"""
@@ -109,6 +122,46 @@ class Sample:
 		grep_command = f"grep -o \"BioSample Name=\".*\"\" {self.sample_path}/pb_formats/*_s*.hifi_reads.bc*.consensusreadset.xml | cut -f2 -d'\"' | tr -d '\n'"
 		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
 		return grep_result.stdout
+	
+	def get_study_info(self, main_csv_path):
+		"""
+		Reads a main CSV containing study information from sharepoint
+		Returns: Str (Study Name) or error
+		"""
+		try:
+			# Read the main CSV file
+			df = pd.read_csv(main_csv_path)
+			# Get the set of all specimen identifiers from the main CSV
+			all_specimens_in_csv = set(df["Identifiant : Specimen"].dropna())
+
+			# Create a DataFrame to be used as the left side of the join
+			specimens_to_find_df = pd.DataFrame({"Identifiant : Specimen": [self.name]})
+
+			# Perform a left join. The order of the keys from the left frame is preserved.
+			filtered_df = pd.merge(specimens_to_find_df, df, on="Identifiant : Specimen", how="left", sort=False)
+			# Detect specimens that matched more than one row in the main CSV
+			duplicate_counts = filtered_df.groupby("Identifiant : Specimen", sort=False).size()
+			duplicates = duplicate_counts[duplicate_counts > 1]
+			if not duplicates.empty:
+				print(f"WARNING: {len(duplicates)} specimen(s) matched multiple rows in the study dataset for {self.name}:", file=sys.stderr)
+				for specimen, count in duplicates.items():
+					cohorts = filtered_df.loc[filtered_df["Identifiant : Specimen"] == specimen, "Cohorte"].tolist()
+					cohorts_str = ", ".join(str(c) for c in cohorts)
+					print(f"  - {specimen}: {count} matches (Cohorts: {cohorts_str})", file=sys.stderr)
+			cohorte=filtered_df.at[0,"Cohorte"]
+			if pd.isna(cohorte): cohorte = "No Cohort"
+			return cohorte
+			
+		except FileNotFoundError as e:
+			print(f"Error: File not found - {e}", file=sys.stderr)
+			sys.exit(1)
+		except KeyError as e:
+			print(f"Error: Column not found in CSV - {e}. Please check the CSV header.", file=sys.stderr)
+			sys.exit(1)
+		except Exception as e:
+			print(f"An unexpected error occurred: {e}", file=sys.stderr)
+			sys.exit(1)
+
 
 	def find_status(self,json_file):
 		"""
@@ -210,4 +263,4 @@ class Sample:
 
 
 	def __str__(self):
-		return (f"{self.name};{self.well};{self.barcode};{self.run_id};{self.case_status['Gender']};{self.case_status['Status']};{self.case_status['Role']};{self.phenotypes}")
+		return (f"""{self.name};{self.well};{self.barcode};{self.run_id};{str(self.case_status['Gender'])};{str(self.case_status['Status'])};{str(self.case_status['Role'])};{str(self.phenotypes)};{str(self.study)}""")

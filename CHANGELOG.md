@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
+## 2026-07-10: Refactor-Preanalysis_Study-Samples
+
+### Changed
+
+- Reviewed the logic and checks for `getSamples.py` as well as the internal methods for `Samples.py`.
+- The Sample Class now has a "study" attribute and a "get_study_info" function that is mostly taken from the older script getStudy.py
+- Having a duplicate sample name no longer prevents the `getSample.py` script from writing the entire run to the sample list. However, if every field in the sample list is identical to an existing sample, the sample in question will not be appended (the other samples of that run will)
+
 ## 2026-07-07: Refactor-MergeRequirements
 
 ### Changed
