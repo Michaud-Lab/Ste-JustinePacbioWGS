@@ -27,6 +27,14 @@ def get_study_info(main_csv_path, specimen_list_path):
 		# Perform a left join. The order of the keys from the left frame is preserved.
 		filtered_df = pd.merge(specimens_to_find_df, df, on="Identifiant : Specimen", how="left", sort=False)
 
+		filtered_df = filtered_df.drop_duplicates(subset=["Identifiant : Specimen"], keep="last")
+		for index, row in filtered_df.iterrows():
+			# Decodeur samples start with 'HSJ'
+
+			if row["Identifiant : Specimen"].startswith("HSJ") :	
+				filtered_df.at[index,"Cohorte"] = "Decodeur"
+
+
 		# Detect specimens that matched more than one row in the main CSV
 		duplicate_counts = filtered_df.groupby("Identifiant : Specimen", sort=False).size()
 		print("Duplicates here")
