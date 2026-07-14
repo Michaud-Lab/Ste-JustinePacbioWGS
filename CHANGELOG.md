@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
+## 2026-07-14: hotfix-rsyncErrors
+
+### Fixed
+
+- Corrects the use of robot nodes Needed to change the way "clusters" are defined in config to be more generic (i.e narval.alliancecan.ca instead of Narval)
+- Fixed a logic check that falsely made interactive sending always active
+
 ## 2026-07-13: Docs-README_Separation
 
 ### Changed
