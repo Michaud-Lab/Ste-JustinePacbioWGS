@@ -16,7 +16,6 @@
 
 set -eo pipefail
 module load bcftools gatk/4.6.1.0 python/3.11
-REMOTE_BASE_PREFIX="staging_juno:/pragmatiq-staging-sd4h/data"
 
 usage() {
     echo "Usage: $0 -n <sample_name> -v <lr_snv_vcf> -o <output_dir> -t <tools_folder> [-c <config_file>]"
@@ -30,7 +29,8 @@ lr_vcf=""
 output_dir=""
 fasta="$SCRATCH/GATK_references/Homo_sapiens_assembly38.fasta"
 log_file=""
-while getopts ":n:v:o:f:t:l:" opt; do
+config_file="$here_folder/../.myconf.json"
+while getopts ":n:v:o:f:t:l:c:" opt; do
     case "${opt}" in
         n)  sample_name="${OPTARG}" ;;
         v)  lr_vcf="${OPTARG}" ;;
@@ -40,6 +40,7 @@ while getopts ":n:v:o:f:t:l:" opt; do
             here_folder="$tools_folder/../Postanalysis/"
             ;;
         l)  log_file="${OPTARG}" ;;
+        c)  config_file="${OPTARG}" ;;
         :)  echo "Error: -${OPTARG} requires an argument."; usage ;;
         *)  usage ;;
     esac
@@ -61,6 +62,8 @@ if [ ! -f "$fasta" ]; then
     echo "Error: Fasta ref not found: $lr_vcf"
     exit 1
 fi
+
+REMOTE_BASE_PREFIX=$(jq -r '.Rclone.short_reads_depot' "$config_file")
 
 concordance_dir="$output_dir/Concordance"
 mkdir -p "$concordance_dir"

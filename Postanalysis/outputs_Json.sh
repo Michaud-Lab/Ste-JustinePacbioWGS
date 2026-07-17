@@ -21,9 +21,7 @@ usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optiona
 config_file="$(dirname $0)/../.myconf.json"
 while getopts ":i:d:c:" o; do
     case "${o}" in
-        i)
-            family_id=${OPTARG}
-            ;;
+        i)	family_id=${OPTARG}	;;
         d)
             directory=${OPTARG}
 			if [ ! -d "$directory" ]; then
@@ -31,12 +29,8 @@ while getopts ":i:d:c:" o; do
 				exit
 			fi
             ;;
-		c)
-			config_file=${OPTARG}
-			;;
-		*)
-            usage
-            ;;
+		c)	config_file=${OPTARG}	;;
+		*)	usage	;;
     esac
 done
 
@@ -120,3 +114,12 @@ s3_destination="$HOME/projects/ctb-rallard/COMMUN/PacBioData/S3-Storage/"
 echo "Sending S3-Storage to Narval: $destination_path/$family_id"
 rsync -rl $s3_local/$family_id "NarvalInteractiveRobot:$s3_destination"
 echo "Rsync Complete"
+
+REMOTE_BASE_PREFIX=$(jq -r '.Rclone.s3_bam_storage' "$config_file")
+rclone_log="$directory/rclone_${family_id}_$(date +'%Y-%m-%d_%H-%M-%S').log"
+echo "Running Rclone send to $REMOTE_BASE_PREFIX in background (log: $rclone_log)"
+nohup rclone copy -L "$s3_destination/$family_id" "$REMOTE_BASE_PREFIX:decodeur-pacbio/S3-Storage/$family_id" \
+	>"$rclone_log" 2>&1 &
+rclone_pid=$!
+disown
+echo "Rclone running in background (PID $rclone_pid)"

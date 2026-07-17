@@ -41,5 +41,10 @@
 			"destination_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/OutputFamilies/",
 			"destination_endpoint": "Globus UUID",
 			"destination_collection": "Globus UUID"
+		},
+	"Rclone":
+		{
+			"short_reads_depot":"staging_juno:/pragmatiq-staging-sd4h/data",
+			"s3_bam_storage":"decodeur-pacbio:decodeur-pacbio/S3-Storage"
 		}
 }

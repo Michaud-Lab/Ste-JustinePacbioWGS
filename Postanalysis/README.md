@@ -11,6 +11,63 @@ Most steps are interactively orchestrated by `postprocessPart1.sh`, which submit
 
 ---
 
+## Rclone transfers
+
+### decodeur-pacbio
+
+We make use of rclone to access cloud resources related to Postanalysis. 
+The first cloud resources is the one where we store the haplotagged BAM (analysis output). Everyday at 3am URLs to this cloud are generated and sent to GeneYX. This first cloud is described in the **s3_bam_storage** in [config](../README.md#config). By default it is named decodeur-pacbio 
+
+```
+>rclone config
+>n (new account)
+>decodeur-pacbio (name)
+>4 (S3 Storage)
+>3 (Ceph Provider)
+>Enter
+>[access_key_id]
+>[secret_access_key]
+>Enter
+>https://objets.juno.calculquebec.ca/ (endpoint)
+>Enter x 5... (Leave blank until done)
+```
+
+You can test the rclone config with:
+```
+>rclone ls decodeur-pacbio:decodeur-pacbio/S3-Storage/test_monarch_01
+```
+
+The path to samples is "decodeur-pacbio/S3-Storage/["family_id"]/["proband"/"mother"/"father"]
+It contains the haplotagged bams and the cpg_pileup files. 
+
+---
+
+The second cloud resource hosts short reads analysis results. We need it to compare variants obtained from long reads analysis to the short reads GVCFs. This second cloud is described in the **short_reads_depot** in [config](../README.md#config). By default it is named staging_juno
+
+```
+>rclone config
+>n (new account)
+>staging_juno (name)
+>4 (S3 Storage)
+>7 (Minio Provider)
+>Enter
+>[access_key_id]
+>[secret_access_key]
+>Enter
+>https://objets.juno.calculquebec.ca (endpoint)
+>Enter x 5... (Leave blank until done)
+```
+You can test the rclone config with:
+```
+rclone ls staging_juno:/pragmatiq-staging-sd4h/data/[sample_name]
+```
+
+	"Rclone":
+		{
+			"short_reads_depot":"staging_juno:/pragmatiq-staging-sd4h/data",
+			"s3_bam_storage":"decodeur-pacbio:decodeur-pacbio/S3-Storage"
+		}
+
 ## Scripts
 
 - **postprocessPart1.sh**
