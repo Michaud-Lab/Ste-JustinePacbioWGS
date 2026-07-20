@@ -47,12 +47,13 @@ touch cleanupReport.txt
 
 samplesheet_dir=$(jq -r ".Paths.sample_sheet_path" $config_file)
 s3_local=$(jq -r ".Paths.s3_folder" $config_file)
+s3_fir="${s3_local}_fir"
 
 if [ -f $samplesheet_dir/$family_id.txt ]; then
 	family_sampleSheet="$samplesheet_dir/$family_id.txt"
 else
 	echo "Could not find samplesheet '$family_id.txt' in $samplesheet_dir"
-	exit
+python3 Preanalysis/getSamples.py -r r84196_20251107_134606	exit
 fi
 
 outputs_file="$directory/_LAST/outputs.json"
@@ -68,7 +69,8 @@ my_dirname=$(basename "$directory")
 local_absolute_path_prefix=${tmp%/$my_dirname/*}/$my_dirname
 echo "Updating paths in $outputs_file to point from $local_absolute_path_prefix to $destination_absolute_path"
 sed -i.bak2 "s,$local_absolute_path_prefix,$destination_absolute_path,g" "$outputs_file"
-
+outputs_file_backup=${outputs_file}.bak2
+sed -i "s,$destination_absolute_path,$local_absolute_path_prefix,g" "$outputs_file_backup"
 
 function updateSymlink() {
 	local index=$1 			# the key in outputs.json
@@ -77,19 +79,34 @@ function updateSymlink() {
 	local new_path=$4		# ...the relative path to the Output Folder in destination
 	local name=$5			# The individual sample name
 	local roleDestination=$6
-	local full_filepath=$(jq -r --arg index1 $index '.[$index1][]' $outputs_file | grep $name)
-	local new_filepath=${full_filepath/$old_path/$new_path}
+	local output=$7
+	local full_filepath;full_filepath=$(jq -r --arg index1 $index '.[$index1][]' $output | grep $name)
+	local new_filepath;new_filepath=${full_filepath/$old_path/$new_path}
 	ln -sf "$new_filepath" "$roleDestination/${new_filename}"
 }
 
 mkdir -p "$s3_local/$family_id"
+mkdir -p "$s3_fir/$family_id"
 tail -n +2 "$family_sampleSheet" | while read p; do
 	role=$(echo $p | cut -d: -f1)
 	name=$(echo $p | cut -d, -f1 | cut -d: -f2)
 	s3_role_destination="$s3_local/$family_id/$role"
+	s3_fir_role_destination="$s3_fir/$family_id/$role"
 	mkdir -p "$s3_role_destination"
+	mkdir -p "$s3_fir_role_destination"
 
-	# The symlink destination needs to be updated to reflect the correct path
+	# First we create the symlinks that are relevant to Fir here (without updating)
+	updateSymlink "humanwgs_family.merged_haplotagged_bam" "${name}.haplotagged.bam" "$destination_absolute_path" "$destination_absolute_path" "$name" "$s3_fir_role_destination" "$outputs_file_backup"
+	updateSymlink "humanwgs_family.merged_haplotagged_bam_index" "${name}.haplotagged.bam.bai" "$destination_absolute_path" "$destination_absolute_path" "$name" "$s3_fir_role_destination" "$outputs_file_backup"
+	updateSymlink "humanwgs_family.cpg_combined_bed" "${name}.GRCh38.cpg_pileup.combined.bed.gz"  "$destination_absolute_path" "$destination_absolute_path" "$name" "$s3_fir_role_destination" "$outputs_file_backup"
+	updateSymlink "humanwgs_family.cpg_combined_bed_index" "${name}.GRCh38.cpg_pileup.combined.bed.gz.tbi"  "$destination_absolute_path" "$destination_absolute_path" "$name" "$s3_fir_role_destination" "$outputs_file_backup"
+	updateSymlink "humanwgs_family.cpg_hap1_bed" "${name}.GRCh38.cpg_pileup.hap1.bed.gz" "$destination_absolute_path" "$destination_absolute_path" "$name" "$s3_fir_role_destination" "$outputs_file_backup"
+	updateSymlink "humanwgs_family.cpg_hap1_bed_index" "${name}.GRCh38.cpg_pileup.hap1.bed.gz.tbi" "$destination_absolute_path" "$destination_absolute_path" "$name" "$s3_fir_role_destination" "$outputs_file_backup"
+	updateSymlink "humanwgs_family.cpg_hap2_bed" "${name}.GRCh38.cpg_pileup.hap2.bed.gz" "$destination_absolute_path" "$destination_absolute_path" "$name" "$s3_fir_role_destination" "$outputs_file_backup"
+	updateSymlink "humanwgs_family.cpg_hap2_bed_index" "${name}.GRCh38.cpg_pileup.hap2.bed.gz.tbi" "$destination_absolute_path" "$destination_absolute_path" "$name" "$s3_fir_role_destination" "$outputs_file_backup"
+
+
+	# The symlink destination needs to be updated to reflect the correct path to Narval
 	# When sending to Narval, the path should be ../../../OutputFamilies/$directory
 	# Because we want to keep relative paths to avoid user-specific absolute paths
 
@@ -98,14 +115,14 @@ tail -n +2 "$family_sampleSheet" | while read p; do
 	#This is a file to keep track of all samples and their new locations
 	echo "$role/$name/$family_id,$destination_absolute_path/" >>fullsampleSheet.csv
 
-	updateSymlink "humanwgs_family.merged_haplotagged_bam" "${name}.haplotagged.bam" "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination"
-	updateSymlink "humanwgs_family.merged_haplotagged_bam_index" "${name}.haplotagged.bam.bai" "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination"
-	updateSymlink "humanwgs_family.cpg_combined_bed" "${name}.GRCh38.cpg_pileup.combined.bed.gz"  "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination"
-	updateSymlink "humanwgs_family.cpg_combined_bed_index" "${name}.GRCh38.cpg_pileup.combined.bed.gz.tbi"  "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination"
-	updateSymlink "humanwgs_family.cpg_hap1_bed" "${name}.GRCh38.cpg_pileup.hap1.bed.gz" "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination"
-	updateSymlink "humanwgs_family.cpg_hap1_bed_index" "${name}.GRCh38.cpg_pileup.hap1.bed.gz.tbi" "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination"
-	updateSymlink "humanwgs_family.cpg_hap2_bed" "${name}.GRCh38.cpg_pileup.hap2.bed.gz" "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination"
-	updateSymlink "humanwgs_family.cpg_hap2_bed_index" "${name}.GRCh38.cpg_pileup.hap2.bed.gz.tbi" "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination"
+	updateSymlink "humanwgs_family.merged_haplotagged_bam" "${name}.haplotagged.bam" "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination" "$outputs_file"
+	updateSymlink "humanwgs_family.merged_haplotagged_bam_index" "${name}.haplotagged.bam.bai" "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination" "$outputs_file"
+	updateSymlink "humanwgs_family.cpg_combined_bed" "${name}.GRCh38.cpg_pileup.combined.bed.gz"  "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination" "$outputs_file"
+	updateSymlink "humanwgs_family.cpg_combined_bed_index" "${name}.GRCh38.cpg_pileup.combined.bed.gz.tbi"  "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination" "$outputs_file"
+	updateSymlink "humanwgs_family.cpg_hap1_bed" "${name}.GRCh38.cpg_pileup.hap1.bed.gz" "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination" "$outputs_file"
+	updateSymlink "humanwgs_family.cpg_hap1_bed_index" "${name}.GRCh38.cpg_pileup.hap1.bed.gz.tbi" "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination" "$outputs_file"
+	updateSymlink "humanwgs_family.cpg_hap2_bed" "${name}.GRCh38.cpg_pileup.hap2.bed.gz" "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination" "$outputs_file"
+	updateSymlink "humanwgs_family.cpg_hap2_bed_index" "${name}.GRCh38.cpg_pileup.hap2.bed.gz.tbi" "$destination_absolute_path" "$new_path" "$name" "$s3_role_destination" "$outputs_file"
 done
 
 
@@ -115,11 +132,16 @@ echo "Sending S3-Storage to Narval: $destination_path/$family_id"
 rsync -rl $s3_local/$family_id "NarvalInteractiveRobot:$s3_destination"
 echo "Rsync Complete"
 
-REMOTE_BASE_PREFIX=$(jq -r '.Rclone.s3_bam_storage' "$config_file")
-rclone_log="$directory/rclone_${family_id}_$(date +'%Y-%m-%d_%H-%M-%S').log"
-echo "Running Rclone send to $REMOTE_BASE_PREFIX in background (log: $rclone_log)"
-nohup rclone copy -L "$s3_destination/$family_id" "$REMOTE_BASE_PREFIX:decodeur-pacbio/S3-Storage/$family_id" \
-	>"$rclone_log" 2>&1 &
-rclone_pid=$!
-disown
-echo "Rclone running in background (PID $rclone_pid)"
+# Send files to s3 cloud via the newly created symlinks
+REMOTE_BASE_PREFIX=$(jq -r '.Rclone.s3_bam_storage // empty' "$config_file")
+if [ -z "${REMOTE_BASE_PREFIX:-}" ]; then
+    echo "Rclone.s3_bam_storage not set in config — skipping rclone send."
+else
+    here_folder="$(cd "$(dirname "$0")" && pwd)"
+    echo "Submitting rclone send to $REMOTE_BASE_PREFIX/$family_id as a Slurm job"
+    rclone_job_id=$(sbatch --parsable -D "$directory" \
+        "$here_folder/rclone_send.slurm" \
+        -s "$s3_fir/$family_id" \
+        -d "$REMOTE_BASE_PREFIX/$family_id")
+    echo "Rclone job submitted (job_id=$rclone_job_id)"
+fi

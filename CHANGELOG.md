@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
+## 2026-07-20: Feat_rlone_setup
+
+### Added
+
+- Adds the `rclone_send.slurm` script, called from the `outputs_Json.sh` script, which is itself called from `postprocessPart1.sh`. It reads the bucket destination from config in Rclone:s3_bam_storage and sends the methylation/haplotagged bam to the bucket with rclone. This can take a couple of hours.
+- Added a "Rclone" section to the Postanalysis Readme, giving instructions in how setting up the config.
+
+
 ## 2026-07-14: hotfix-rsyncErrors
 
 ### Fixed

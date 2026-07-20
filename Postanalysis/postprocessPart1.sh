@@ -747,23 +747,23 @@ if [ "$include_concordance" == true ] || [ "$run_all" == true ]; then
 	cat << EOF 
 "Running the following: sbatch --parsable -J concordance_${family_id}_proband \
 -D $directory/Concordance $here_folder/run_concordance.sh \
--n "$proband_name" -v "$proband_normalized_SNV" -o "$directory" -f "$fasta_path"
+-n "$proband_name" -v "$proband_normalized_SNV" -o "$directory" -f "$fasta_path" -c "$config_file"
 EOF
 	dependency_concordance_proband="$(sbatch --parsable -J "sr-lr_${family_id}_proband_${proband_name}" \
 		-D "$directory/Concordance" "$here_folder/run_concordance.sh" \
-		-n "$proband_name" -v "$proband_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file")"
+		-n "$proband_name" -v "$proband_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file" -c "$config_file")"
 	echo "Concordance report for proband: $directory/Concordance/concordance_report_${proband_name}.txt" >> "$report_file"
 	log_step "SUBMITTED: concordance_${family_id}_proband (job_id=$dependency_concordance_proband)"
 	dependency_concordance_first="$(sbatch --parsable -J "sr-lr_${family_id}_${first_parent_role}_${first_parent_name}" \
 		-D "$directory/Concordance" "$here_folder/run_concordance.sh" \
-		-n "$first_parent_name" -v "$first_parent_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file")"
+		-n "$first_parent_name" -v "$first_parent_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file" -c "$config_file")"
 	echo "Concordance report for ${first_parent_role}: $directory/Concordance/concordance_report_${first_parent_name}.txt" >> "$report_file"
 	log_step "SUBMITTED: concordance_${family_id}_${first_parent_role} (job_id=$dependency_concordance_first)"
 	final_dependencies+=("$dependency_concordance_proband" "$dependency_concordance_first")
 	if [ "$mode" == "trio" ]; then
 		dependency_concordance_second="$(sbatch --parsable -J "sr-lr_${family_id}_${second_parent_role}_${second_parent_name}" \
 			-D "$directory/Concordance" "$here_folder/run_concordance.sh" \
-			-n "$second_parent_name" -v "$second_parent_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file")"
+			-n "$second_parent_name" -v "$second_parent_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file" -c "$config_file")"
 		echo "Concordance report for ${second_parent_role}: $directory/Concordance/concordance_report_${second_parent_name}.txt" >> "$report_file"
 		log_step "SUBMITTED: concordance_${family_id}_${second_parent_role} (job_id=$dependency_concordance_second)"
 		final_dependencies+=("$dependency_concordance_second")
