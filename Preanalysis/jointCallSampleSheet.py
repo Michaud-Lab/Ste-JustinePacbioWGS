@@ -67,7 +67,7 @@ if __name__ == "__main__":
 		family_ids.append(args.father)
 	
 	#Find the samples from the list
-	sample_list = pd.read_csv(args.list,sep=";",names=["Name","Well","Barcode","run_id","Gender","Status","Role","HPO","BAM","Affected"])
+	sample_list = pd.read_csv(args.list,sep=";",names=["Name","Well","Barcode","run_id","Gender","Status","Role","HPO","Study","BAM","Affected"])
 	sample_list = sample_list.replace({np.nan: ""})
 	family={}
 	for sample_id in family_ids:

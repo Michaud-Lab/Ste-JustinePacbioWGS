@@ -96,7 +96,7 @@ if __name__ == "__main__":
 					bam_path = str(row["BAM"]),
 					status = {"Status":str(row["Status"]),"Role":str(row["Role"]),
 						"Gender":str(row["Gender"]),"Affected":row["Affected"]},
-					HPOs = str(row["HPO"]),
+					HPOs = str(row["HPO"]).replace(";",","),
 					study = row["Study"],
 					config_file = args.config)
 					if str(existing_sample_object) == str(sample):
