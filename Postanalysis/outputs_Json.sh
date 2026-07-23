@@ -53,7 +53,7 @@ if [ -f $samplesheet_dir/$family_id.txt ]; then
 	family_sampleSheet="$samplesheet_dir/$family_id.txt"
 else
 	echo "Could not find samplesheet '$family_id.txt' in $samplesheet_dir"
-python3 Preanalysis/getSamples.py -r r84196_20251107_134606	exit
+	exit
 fi
 
 outputs_file="$directory/_LAST/outputs.json"
