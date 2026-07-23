@@ -7,3 +7,8 @@ validation_merged_list.tsv
 mySampleList.txt
 *.pyc
 testSingleSamples.csv
+local_get_geneYXList.sh
+local_send_excel.sh
+.nextflow.log*
+Postanalysis/*log*
+Postanalysis/.nextflow/*
