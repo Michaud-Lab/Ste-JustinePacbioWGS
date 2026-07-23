@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
+## v1.1.0
+
+## 2026-07-23: Hotfix-HPOs_list_columns
+
+### Fixed:
+
+- Fixed the number of columns in the sample list both in `jointCallSampleSheet.py` and `getSamples.py`. Since columns are delimited by ';', the HPO must be separated by another character, ','.
+
 ## 2026-07-20: Feat_rlone_setup
 
 ### Added
