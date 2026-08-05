@@ -433,9 +433,9 @@ inferred_gender=$(grep -A 3 humanwgs_family.inferred_sex $output_file | sed "2q;
 # Check the first parent (usually the mother)
 first_parent_real_gender=$(grep -m2 '"sex": ' "$samplesheet" | sed -n '2p' | cut -d'"' -f4)
 first_parent_inferred_gender=$(grep -A 3 humanwgs_family.inferred_sex $output_file | sed "3q;d" | cut -d\" -f2)
-if [ "$first_parent_real_gender" == "FEMALE" ]; then
+if [ "$first_parent_real_gender" == "FEMALE" ] || [ "$first_parent_real_gender" == "Female" ]; then
 	first_parent_role="Mother"
-elif [ "$first_parent_real_gender" == "MALE" ]; then
+elif [ "$first_parent_real_gender" == "MALE" ] || [ "$first_parent_real_gender" == "Male" ]; then
 	first_parent_role="Father"
 else
 	echo "Warning: First parent's given gender is not recognized: $first_parent_real_gender"
@@ -447,9 +447,9 @@ if [ "$mode" == "trio" ]; then
 	second_parent_real_gender=$(grep -m3 '"sex": ' "$samplesheet" | sed -n '3p' | cut -d'"' -f4)
 	second_parent_inferred_gender=$(grep -A 3 humanwgs_family.inferred_sex $output_file | sed "4q;d" | cut -d\" -f2)
 
-	if [ "$second_parent_real_gender" == "MALE" ]; then
+	if [ "${second_parent_real_gender,,}" == "male" ]; then
 		second_parent_role="Father"
-	elif [ "$second_parent_real_gender" == "FEMALE" ]; then
+	elif [ "${second_parent_real_gender,,}" == "female" ]; then
 		second_parent_role="Mother"
 	else
 		echo "Warning: Second parent's given gender is not recognized: $second_parent_real_gender"
@@ -459,12 +459,12 @@ fi
 
 # Check specifically for errors in assigned and inferred genders
 genderError=false
-if [ "$first_parent_inferred_gender" != "$first_parent_real_gender" ]; then
+if [ "${first_parent_inferred_gender,,}" != "${first_parent_real_gender,,}" ]; then
 	echo "Warning: First parent's (Of assigned role $first_parent_role) inferred gender is not $first_parent_real_gender:  Got $first_parent_inferred_gender"
 	genderError=true
 fi
 
-if [ "$second_parent_inferred_gender" != "$second_parent_real_gender" ]; then
+if [ "${second_parent_inferred_gender,,}" != "${second_parent_real_gender,,}" ]; then
 	echo "Warning: Second parent's (Of assigned role $second_parent_role) inferred gender is not $second_parent_real_gender:  Got $second_parent_inferred_gender"
 	genderError=true
 fi
@@ -473,7 +473,7 @@ if [ "$real_gender" = "null" ] && [ "$inferred_gender" = "null" ];then
 	echo "Warning: gender is set to 'null'"
 	final_gender=""
 else
-	if [ "$real_gender" = "$inferred_gender" ];then
+	if [ "${real_gender,,}" = "${inferred_gender,,}" ];then
 		echo "Proband Gender confirmed to be $real_gender" >> $report_file
 		final_gender=$(echo $real_gender | cut -c1-1)
 	elif [ "$real_gender" = "null" ];then
