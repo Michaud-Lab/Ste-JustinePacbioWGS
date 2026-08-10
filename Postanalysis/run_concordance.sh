@@ -3,7 +3,7 @@
 #SBATCH --output=J-%x.%j.out
 #SBATCH --account=def-rallard
 #SBATCH --mem=8G
-#SBATCH --time=02:00:00
+#SBATCH --time=05:00:00
 
 # Runs SR/LR VCF concordance for a single sample.
 # Fetches the Illumina GVCF from the staging server via rclone, then calls

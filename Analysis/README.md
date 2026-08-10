@@ -23,6 +23,32 @@ This folder also contains a script called "exec_script.sh". It is meant to be in
 
 ---
 
+- **monitor_jobs.sh**
+  - *Usage*:
+    ```bash
+    sbatch Analysis/monitor_jobs.sh [interval_seconds] [job_name_filter]
+    ```
+  - *Goal*: Polls `squeue` at a regular interval while the WGS pipeline instance(s) run, tracking how many jobs are queued/running and how many CPUs/RAM they are allocated. Also tracks the running peak of each of those numbers, so the report log shows the highest concurrency/resource usage reached over the course of the run(s). Meant to help size future submissions against real cluster usage.
+  - *Arguments*:
+    - `interval_seconds` — how often to poll, in seconds (default `600`).
+    - `job_name_filter` — optional `squeue -n` glob/name filter to restrict polling to a subset of jobs (default: all jobs for the current user).
+  - *Outputs*: Appends a timestamped CSV row per poll to `Analysis/wdl_monitor_report.log`, plus a human-readable line to stdout/the Slurm job log. Prints a final peak summary to the log when the job is cancelled or hits its time limit.
+
+---
+
+- **seff_report.py**
+  - *Usage*:
+    ```bash
+    python3 Analysis/seff_report.py <miniwdl_run_dir> [-o OUTPUT]
+    ```
+  - *Goal*: Given a miniwdl run folder (e.g. `/home/felixant/scratch/p155`), checks whether the run completed successfully (presence of `_LAST/out`), then walks every task directory looking for `slurm-<id>.out` logs and runs `seff` on each job id. Reports status, cores, CPU time, CPU efficiency, wall-clock time, memory utilized, memory requested, and memory efficiency for every job, and flags task directories that hold more than one `slurm-*.out` file (i.e. the task was restarted) with the attempt number. Ends with a summary: job/attempt counts, restarted directories, state distribution, total CPU/wall-clock time, total memory utilized, the longest single job, and CPU/memory efficiency (average, wall-time-weighted average, min, max — excluding jobs under 1 minute of wall-clock time, since their efficiency is dominated by fixed startup overhead).
+  - *Arguments*:
+    - `run_dir` — the miniwdl run folder to inspect (positional).
+    - `-o`/`--output` — write the report to this path instead of the default `<run_dir>/resource_efficiency_report_<run_dir_basename>.log` (the report is always printed to stdout too).
+  - *Outputs*: A resource-efficiency report printed to stdout and saved next to the run folder.
+
+---
+
 ## Pipeline submodule
 
 The WGS pipeline lives in `Analysis/HiFi-human-WGS-WDL/`, included as a git submodule. The fork at [FelixAntoineLeSieur/HiFi-human-WGS-WDL](https://github.com/FelixAntoineLeSieur/HiFi-human-WGS-WDL) contains installation instructions and the Alliance-specific modifications.

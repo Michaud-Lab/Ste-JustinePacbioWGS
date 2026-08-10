@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
  
 ## [Unreleased]
+2026-08-18: Feat_monitor_benchmark
+
+### Added
+
+- `Analysis/monitor_jobs.sh`: polls `squeue` at a regular interval while WGS pipeline instances run, logging job counts and CPU/RAM allocation (and their running peaks) to `Analysis/wdl_monitor_report.log`.
+- `Analysis/seff_report.py`: given a miniwdl run folder, checks it completed successfully (`_LAST/out` present), then runs `seff` on every `slurm-<id>.out` job under it and reports status, cores, CPU time/efficiency, wall-clock time, and memory utilized/requested/efficiency per job. Flags restarted tasks (multiple `slurm-*.out` files in the same directory) and ends with a summary (totals, longest job, and wall-time-weighted efficiency stats).
+- `Postanalysis/postprocessPart1.sh` now runs `Analysis/seff_report.py` as an interactive step (before the GeneYX send steps); it is skipped automatically (no prompt) if a `resource_efficiency_report_<familyID>.log` already exists in the run directory.
 
 ## 2026-08-18: Feat-Jasmine
 

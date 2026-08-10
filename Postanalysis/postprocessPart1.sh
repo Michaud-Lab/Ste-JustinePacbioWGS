@@ -344,7 +344,6 @@ else
 fi
 
 report_file="$directory/R-${id}_$(date +'%Y-%m-%d_%H-%M-%S')_postprocess_report.txt"
-#log_file="$directory/status_${id}_$(date +'%Y-%m-%d_%H-%M-%S').log"
 log_file="$report_file"
 echo "Report file is $report_file"
 echo "Status log: $log_file"
@@ -500,10 +499,18 @@ fi
 
 #-----Steps-----#
 
+seff_report_file="$directory/resource_efficiency_report_$(basename "$directory").log"
+
 if [ $run_all == true ]; then
 	echo "Running all steps without prompt"
 else
 	echo "Interactive mode enabled, will prompt for each step"
+	if [ -f "$seff_report_file" ]; then
+		echo "Resource efficiency report already exists at $seff_report_file, skipping prompt"
+		run_seff_report=false
+	else
+		ask_yes_no "Run seff resource-efficiency report on the miniwdl run?" run_seff_report
+	fi
 	ask_yes_no "Send to GeneYX?" send_to_geneyx
 	ask_yes_no "Send Case to GeneYX?" send_case_to_geneyx
 	ask_yes_no "Send QC info to GeneYX?" send_qc_to_geneyx
@@ -515,6 +522,18 @@ else
 	ask_yes_no "Include SR/LR concordance check?" include_concordance
 	ask_yes_no "Include cleanup and send?" include_cleanup
 
+fi
+
+#Seff resource-efficiency report step
+if [ -f "$seff_report_file" ]; then
+	echo "Resource efficiency report already exists at $seff_report_file, skipping" >> "$report_file"
+elif [ "$run_seff_report" == true ] || [ "$run_all" == true ]; then
+	echo "Generating seff resource-efficiency report for $family_id" >> "$report_file"
+	if python3 "$here_folder/../Analysis/seff_report.py" "$directory" >> "$report_file" 2>&1; then
+		log_step "DONE: seff resource-efficiency report for $family_id"
+	else
+		rc=$?; log_step "FAILED: seff resource-efficiency report for $family_id (rc=$rc)"; exit $rc
+	fi
 fi
 
 #Send to GeneYX step
@@ -741,7 +760,7 @@ if [ "$include_multiqc" == true ] || [ "$run_all" == true ]; then
 fi
 
 #SR/LR concordance step
-if [ "$include_concordance" == true ] || [ "$run_all" == true ]; then
+if [[ $group_code != "decode" && ("$include_concordance" == true || "$run_all" == true) ]] ; then
 	echo "Launching SR/LR concordance checks" >> "$report_file"
 	mkdir -p "$directory/Concordance"
 	cat << EOF 
@@ -768,6 +787,8 @@ EOF
 		log_step "SUBMITTED: concordance_${family_id}_${second_parent_role} (job_id=$dependency_concordance_second)"
 		final_dependencies+=("$dependency_concordance_second")
 	fi
+elif [[ $group_code != "decode" ]]; then
+	log_step "SKIPPED: concordance, not for decodeur cases"
 fi
 
 #Cleanup and transfer step

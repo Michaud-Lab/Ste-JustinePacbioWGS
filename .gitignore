@@ -16,3 +16,5 @@ Postanalysis/.nextflow/*
 J-*.out
 *_error.json
 *.xlsx
+Logs/*
+wdl_report_*

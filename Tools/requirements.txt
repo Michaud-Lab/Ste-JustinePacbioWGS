@@ -58,6 +58,7 @@ pygments==2.19.2+computecanada
 pygtail==0.14.0
 PyJWT==2.10.1+computecanada
 pyparsing==3.3.2+computecanada
+pysam==0.23.3+computecanada
 python_dateutil==2.9.0.post0+computecanada
 python_json_logger==4.1.0+computecanada
 pytz==2025.2+computecanada
