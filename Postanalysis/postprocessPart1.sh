@@ -199,6 +199,24 @@ function log_step() {
 	echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" | tee -a "$log_file"
 }
 
+# Fetches the SR GVCF for a sample directly on the login node (rclone is slow/blocked
+# from job nodes), so run_concordance.sh can be submitted via sbatch without waiting on it.
+# Returns 1 (and logs why) if concordance should be skipped for this sample.
+function fetch_concordance() {
+	local sample_name="$1"
+	if bash "$here_folder/fetch_concordance_gvcf.sh" -n "$sample_name" -o "$directory" -c "$config_file" -l "$log_file"; then
+		return 0
+	else
+		local rc=$?
+		if [ "$rc" -eq 2 ]; then
+			log_step "SKIPPED: concordance for ${sample_name} (GVCF not found on staging)"
+		else
+			log_step "FAILED: concordance fetch for ${sample_name} (rc=$rc)"
+		fi
+		return 1
+	fi
+}
+
 # send_status.log helpers — static file, stores last known status per step
 function step_done() {
 	grep -q "^${1}: DONE" "$directory/send_status.log" 2>/dev/null
@@ -760,32 +778,40 @@ if [ "$include_multiqc" == true ] || [ "$run_all" == true ]; then
 fi
 
 #SR/LR concordance step
+# Note: the SR GVCF is fetched via rclone directly here (fetch_concordance), not inside the
+# sbatch job — job nodes can be very slow/blocked for that transfer. Only samples whose
+# fetch succeeds get an sbatch job submitted for the GATK genotyping + comparison.
 if [[ $group_code != "decode" && ("$include_concordance" == true || "$run_all" == true) ]] ; then
 	echo "Launching SR/LR concordance checks" >> "$report_file"
 	mkdir -p "$directory/Concordance"
-	cat << EOF 
-"Running the following: sbatch --parsable -J concordance_${family_id}_proband \
--D $directory/Concordance $here_folder/run_concordance.sh \
--n "$proband_name" -v "$proband_normalized_SNV" -o "$directory" -f "$fasta_path" -c "$config_file"
-EOF
-	dependency_concordance_proband="$(sbatch --parsable -J "sr-lr_${family_id}_proband_${proband_name}" \
-		-D "$directory/Concordance" "$here_folder/run_concordance.sh" \
-		-n "$proband_name" -v "$proband_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file" -c "$config_file")"
-	echo "Concordance report for proband: $directory/Concordance/concordance_report_${proband_name}.txt" >> "$report_file"
-	log_step "SUBMITTED: concordance_${family_id}_proband (job_id=$dependency_concordance_proband)"
-	dependency_concordance_first="$(sbatch --parsable -J "sr-lr_${family_id}_${first_parent_role}_${first_parent_name}" \
-		-D "$directory/Concordance" "$here_folder/run_concordance.sh" \
-		-n "$first_parent_name" -v "$first_parent_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file" -c "$config_file")"
-	echo "Concordance report for ${first_parent_role}: $directory/Concordance/concordance_report_${first_parent_name}.txt" >> "$report_file"
-	log_step "SUBMITTED: concordance_${family_id}_${first_parent_role} (job_id=$dependency_concordance_first)"
-	final_dependencies+=("$dependency_concordance_proband" "$dependency_concordance_first")
-	if [ "$mode" == "trio" ]; then
-		dependency_concordance_second="$(sbatch --parsable -J "sr-lr_${family_id}_${second_parent_role}_${second_parent_name}" \
+
+	if fetch_concordance "$proband_name"; then
+		dependency_concordance_proband="$(sbatch --parsable -J "sr-lr_${family_id}_proband_${proband_name}" \
 			-D "$directory/Concordance" "$here_folder/run_concordance.sh" \
-			-n "$second_parent_name" -v "$second_parent_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file" -c "$config_file")"
-		echo "Concordance report for ${second_parent_role}: $directory/Concordance/concordance_report_${second_parent_name}.txt" >> "$report_file"
-		log_step "SUBMITTED: concordance_${family_id}_${second_parent_role} (job_id=$dependency_concordance_second)"
-		final_dependencies+=("$dependency_concordance_second")
+			-n "$proband_name" -v "$proband_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file")"
+		echo "Concordance report for proband: $directory/Concordance/concordance_report_${proband_name}.txt" >> "$report_file"
+		log_step "SUBMITTED: concordance_${family_id}_proband (job_id=$dependency_concordance_proband)"
+		final_dependencies+=("$dependency_concordance_proband")
+	fi
+
+	if fetch_concordance "$first_parent_name"; then
+		dependency_concordance_first="$(sbatch --parsable -J "sr-lr_${family_id}_${first_parent_role}_${first_parent_name}" \
+			-D "$directory/Concordance" "$here_folder/run_concordance.sh" \
+			-n "$first_parent_name" -v "$first_parent_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file")"
+		echo "Concordance report for ${first_parent_role}: $directory/Concordance/concordance_report_${first_parent_name}.txt" >> "$report_file"
+		log_step "SUBMITTED: concordance_${family_id}_${first_parent_role} (job_id=$dependency_concordance_first)"
+		final_dependencies+=("$dependency_concordance_first")
+	fi
+
+	if [ "$mode" == "trio" ]; then
+		if fetch_concordance "$second_parent_name"; then
+			dependency_concordance_second="$(sbatch --parsable -J "sr-lr_${family_id}_${second_parent_role}_${second_parent_name}" \
+				-D "$directory/Concordance" "$here_folder/run_concordance.sh" \
+				-n "$second_parent_name" -v "$second_parent_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file")"
+			echo "Concordance report for ${second_parent_role}: $directory/Concordance/concordance_report_${second_parent_name}.txt" >> "$report_file"
+			log_step "SUBMITTED: concordance_${family_id}_${second_parent_role} (job_id=$dependency_concordance_second)"
+			final_dependencies+=("$dependency_concordance_second")
+		fi
 	fi
 elif [[ $group_code != "decode" ]]; then
 	log_step "SKIPPED: concordance, not for decodeur cases"
