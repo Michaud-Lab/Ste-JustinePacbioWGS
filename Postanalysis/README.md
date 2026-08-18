@@ -72,7 +72,7 @@ rclone ls staging_juno:/pragmatiq-staging-sd4h/data/[sample_name]
 
 - **postprocessPart1.sh**
   - *Usage*: `bash Postanalysis/postprocessPart1.sh -i <familyID> -g <group> [-s] [-c config]`
-  - *Goal*: Main orchestrator for post-processing. Normalizes per-sample VCFs, runs the GeneYX unified VCF step, uploads samples and the case to GeneYX, then submits Slurm jobs for Somalier, Peddy, SVTopo, Triomix (trios only), MultiQC, and per-sample SR/LR concordance checks. Optionally runs cleanup and initiates the Globus transfer to Narval.
+  - *Goal*: Main orchestrator for post-processing. Optionally runs `Analysis/seff_report.py` on the miniwdl run directory, normalizes per-sample VCFs, runs the GeneYX unified VCF step, uploads samples and the case to GeneYX, then submits Slurm jobs for Somalier, Peddy, SVTopo, Triomix (trios only), MultiQC, and per-sample SR/LR concordance checks. Optionally runs cleanup and initiates the Globus transfer to Narval.
   - *Arguments*:
     - `-i` Family or sample ID (must match a samplesheet in `sample_sheet_path`)
     - `-g` Study group: `Pragmatiq`/`prag`/`p`, `Decodeur`/`decode`/`d`, or `Validation`/`valid`/`v`
@@ -82,6 +82,7 @@ rclone ls staging_juno:/pragmatiq-staging-sd4h/data/[sample_name]
     - `R-{id}_YYYY-MM-DD_HH-MM-SS_postprocess_report.txt` — timestamped log of each command's stdout/stderr
     - `status_{id}_YYYY-MM-DD_HH-MM-SS.log` — timestamped step status log (SUBMITTED / SUCCESS / FAILED per step)
     - `send_status.log` — static per-step status file for the cleanup/transfer steps; supports re-run skipping
+    - `resource_efficiency_report_{id}.log` — `seff` resource-efficiency report (see [Analysis README](../Analysis/README.md#seff_reportpy)); the step is skipped if this file already exists
 
 ---
 
@@ -160,6 +161,30 @@ rclone ls staging_juno:/pragmatiq-staging-sd4h/data/[sample_name]
     - **AMBIGUOUS** (75–90 %)
     - **LIKELY DIFFERENT PATIENTS** (< 75 %)
   - *Notes*: Requires `cyvcf2` and `numpy` (available via the `Tools/ENV` virtualenv). Called automatically by `run_concordance.sh`; can also be run standalone for ad-hoc comparisons.
+
+---
+
+- **proband_allele_depth.py**
+  - *Usage*: `python3 Postanalysis/proband_allele_depth.py -t <prefix>.parental_only.tsv -o <output_prefix> --run-dir <family_run_dir>` (or `-g <proband.g.vcf.gz> [--rnc-vcf <raw_joint.vcf.gz>]` instead of `--run-dir`)
+  - *Goal*: For every "parental-only" variant reported by `filter_parents.py`, reports the proband's allele depth (ref-supporting vs. alt-supporting reads). When the proband is an explicit hom-ref call in the joint VCF, its AD is read directly from the `parental_only.tsv`. When the proband is a no-call (`./.`) in the joint VCF, the same position is looked up in the proband's own gVCF instead, since the joint VCF carries no read information for no-calls but the gVCF still does (either an actual variant record with AD, or a hom-ref reference block, in which case alt support is 0). For those no-call variants, also looks up the proband's **RNC (Reason for No Call)** in the raw GLnexus joint VCF, explaining *why* GLnexus didn't call the proband there (e.g. `II` = the proband's own gVCF simply never called anything at that site; `DD` = GLnexus's depth reconciliation across the variant's span came up short, often due to an adjacent/overlapping low-depth call — see `filter_parents.py`'s REASON column vs. this script's RNC output for a worked example).
+  - *Arguments*:
+    - `-t` / `--parental-tsv` — `parental_only.tsv` from `filter_parents.py`
+    - `-o` / `--output-prefix` — output prefix
+    - `--run-dir` — HiFi-human-WGS-WDL family run directory (the folder containing `_LAST`). Infers `--gvcf` (`_LAST/out/small_variant_gvcf/0/*.g.vcf.gz`) and `--rnc-vcf` (`_LAST/call-joint/call-glnexus/out/vcf/*.vcf.gz`) automatically — an explicit `--gvcf`/`--rnc-vcf` overrides the inferred path. **Note**: the RNC source is the raw `call-joint/call-glnexus` task output, *not* the WDL's published `_LAST/out/joint_small_variants_vcf/` — that one has already had DP/AD/GQ/PL/RNC blanked out for no-calls by the time phasing is done with it.
+    - `-g` / `--gvcf` — proband's single-sample gVCF (must be bgzip-compressed and tabix-indexed, `.tbi` alongside). Not needed if `--run-dir` is given.
+    - `--rnc-vcf` — the raw, pre-phasing GLnexus joint VCF (see note above). Optional; if neither this nor `--run-dir` is given, the RNC lookup/report is skipped.
+    - `--parental-vcf` — `parental_only.vcf.gz` from `filter_parents.py`, used to write the high-alt-support VCF subset below. Default: `--parental-tsv` with `.tsv` replaced by `.vcf.gz` (i.e. the matching file `filter_parents.py` wrote alongside the TSV).
+    - `--min-alt-fraction` — alt allele fraction threshold for flagging a variant as possibly missed in the proband (default: 0.1)
+    - `--min-depth` — total depth threshold for the same flag (default: 5)
+  - *Outputs*:
+    - `<prefix>.proband_depth.tsv` — per-variant CHROM/POS/REF/ALT, `GROUP` (`PROBAND_MISSING`/`PROBAND_REF`, from the TSV's REASON column), source of the depth call, proband/mother/father GT, ref/alt/other read depth, alt allele fraction, and `PROBAND_RNC` (`NA` for `PROBAND_REF` rows, or when no RNC source was given).
+    - `<prefix>.proband_depth_bins.tsv` — for each group, the variant count, proportion, and mean total depth in each 0.05-wide alt-allele-fraction bin.
+    - `<prefix>.proband_depth.png` — one column per group (`PROBAND_MISSING`, `PROBAND_REF`): a stacked proportion histogram of the proband's alt allele fraction (stacked by depth source for the missing group) on top, and the mean total depth per bin below. Useful for spotting parental-only calls where the proband actually shows partial read support for the variant, and for gauging whether the low-support bins are just low-depth noise.
+    - `<prefix>.high_alt_support.vcf.gz` — the subset of parental-only variants where the proband's alt allele fraction and depth both clear the `--min-alt-fraction`/`--min-depth` thresholds (default: fraction > 0.1, depth > 5), for candidates the caller may have missed in the proband. `PROBAND_REF` records are copied straight from `parental_only.vcf.gz` (already informative — the proband's AD is right there). `PROBAND_MISSING` records are rewritten to a simplified `GT:DP:AD` FORMAT with the proband's field populated from the gVCF-derived depth instead of the joint VCF's uninformative `./.`; mother/father fields are carried over unchanged, and `PROBAND_SOURCE` is added to INFO.
+    - `<prefix>.high_alt_support_genotype.tsv` — for the same high-alt-support variants, a full `MOTHER_CLASS`/`FATHER_CLASS`/`PROBAND_CLASS` cross-tab (each `HOM_REF`/`HET`/`HOM_ALT`/`MISSING`/`PARTIAL_MISSING`), from which counts like "homozygous-ALT parent but ref/missing proband call" (the strongest Mendelian-inheritance signal that the caller may have missed something) can be derived.
+    - `<prefix>.high_alt_support_rnc.tsv` — proband RNC code counts among the flagged `PROBAND_MISSING` variants (only written when `--run-dir`/`--rnc-vcf` is given).
+    - Per-group counts, the full per-bin table (count, proportion, mean depth), the high-alt-support variant count, a human-readable digest of the genotype cross-tab (proband GT class distribution; ≥1-parent-HOM_ALT and both-parents-HOM_ALT breakdowns; mean depth/alt-fraction per proband GT class), and the RNC code breakdown (with GLnexus's own header description of each code) are also printed to stdout.
+  - *Notes*: Requires `pysam` and `matplotlib` (available via the `Tools/ENV` virtualenv).
 
 ---
 

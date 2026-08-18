@@ -2,8 +2,8 @@
 #SBATCH --job-name=rclone_send
 #SBATCH --output=J-%x.%j.out
 #SBATCH --account=def-rallard
-#SBATCH --time=08:00:00
-#SBATCH --cpus-per-task=8
+#SBATCH --time=12:00:00
+#SBATCH --cpus-per-task=1
 #SBATCH --mem=20G
 
 # Copies a local directory to an rclone remote, following symlinks (-L).
@@ -45,6 +45,7 @@ rclone copy -L \
     --transfers 2 \
     --s3-chunk-size 512M \
     --s3-upload-concurrency 8 \
+    --multi-thread-streams 16 \
     --buffer-size 512M \
     "$source_dir" "$destination"
 log_step "SUCCESS: rclone_send to $destination"
