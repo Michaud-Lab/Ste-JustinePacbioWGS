@@ -122,6 +122,16 @@ The getSamples.py and samplesheet scripts can also be called manually on Fir if 
 
 ---
 
+- **run_jasmine.sh**
+  - *Usage*:
+    ```bash
+    bash Preanalysis/run_jasmine.sh -r <run_id> [-t <jasmine_version>] [-c <config_file>]
+    ```
+  - *Goal*: Submits one `jasmine.slurm` job per well/cell of a given run, to (re)call 5mC methylation with a specific pbjasmine version. On-instrument methylation calls depend on the jasmine version used at sequencing time, which can differ from the version recommended for analysis, so this lets us recall methylation uniformly across a run. For each well, it locates the hifi consensusreadset XML under `pb_formats/` and passes it to `jasmine.slurm`, which does the actual model download/execution and BAM/XML rewriting (see `jasmine.slurm` header for available version tags).
+  - *Outputs*: One Slurm job submitted per well (wells without a `pb_formats` folder are skipped), and a `jasmine_run_<run_id>.log` file (written next to the script) recording `<cell_folder> job id: <job_id>` for each submission.
+
+---
+
 ## Helper modules
 
 These files are imported by the scripts above and are not meant to be called directly.

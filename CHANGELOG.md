@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
+## 2026-08-18: Feat-Jasmine
+
+### Added
+
+- Added `Preanalysis/jasmine.slurm`: (re)calls 5mC methylation on a well's hifi/fail BAMs using a specified pbjasmine version. This is needed because the jasmine version used has a large influence on methylation calls (different versions use different models), and the on-instrument version does not always match the one recommended by SickKids (v2.0.0). Handles downloading/caching the requested jasmine version and, for v2.0.0, rewrites the BAM header's BINDINGKIT/SEQUENCINGKIT so SPRQ-chemistry BAMs are accepted.
+- Added `Preanalysis/run_jasmine.sh`: submits `jasmine.slurm` for every well of a given run, logging submitted job IDs to `jasmine_run_<run_id>.log`.
+
 ## v1.1.0
 
 ## 2026-07-23: Hotfix-HPOs_list_columns

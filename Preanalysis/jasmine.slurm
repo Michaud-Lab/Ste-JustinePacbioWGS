@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#SBATCH --time=6:00:00
+#SBATCH --time=24:00:00
 #SBATCH --account=def-rallard
 #SBATCH --output=J-%x.%j.out
 #SBATCH --cpus-per-task=16
@@ -35,7 +35,7 @@ usage() {
 }
 JASMINE_VERSION="2.0.0"
 JASMINE_TAG="${JASMINE_TAGS[$JASMINE_VERSION]:-}"
-config_file="$SCRATCH/MINIWDL/Ste-JustinePacbioWGS/.myconf.json"
+config_file="$SCRATCH/Ste-JustinePacbioWGS/.myconf.json"
 while getopts "x:t:c:" opt; do
     case "${opt}" in
 		x)	INXML="${OPTARG}"
@@ -89,8 +89,6 @@ cp -v "$INXML" "$outxml"
 echo "INXML $(basename "$INXML")"
 echo "OUTXML $(basename "$outxml")"
 
-barcode=$(echo "$prefix" | cut -d'.' -f3)
-
 echo "Using pbjasmine version $JASMINE_VERSION (tag $JASMINE_TAG)"
 JASMINE_DIR="$tools_folder/Jasmine_$JASMINE_TAG"
 
@@ -126,10 +124,29 @@ for readType in "ConsensusReadBamFile:hifi_reads" "FailReadBamFile:fail_reads"; 
 	in_base=$(basename "$in_bam")
 	out_base="${in_base%.bam}.jasminev2.bam"
 
-	echo "Copying $in_base to scratch"
-	cp -v "$in_bam" "$SLURM_TMPDIR/$in_base"
 	ls -lah "$SLURM_TMPDIR"
 	[ -f "$in_bam.pbi" ] && cp -v "$in_bam.pbi" "$SLURM_TMPDIR/$in_base.pbi"
+	
+	# If jasmine version is 2.0.0, it will not work with SPRQ chemistry.
+	# We need to replace the BINDINGKIT and SEQUENCINGKIT in BAM header
+	# jasmine itself removes any existing MM/ML tags before inference, so no
+	# separate tag-stripping pass is needed here.
+	if [ "$JASMINE_TAG" == "2.0.0" ]; then
+		module load samtools/1.22.1
+		# Header files live in $SLURM_TMPDIR, not next to $in_bam: that source
+		# directory is shared/read-only PacBioData storage, not guaranteed writable.
+		new_header_file="$SLURM_TMPDIR/header_$(basename "$in_bam" .bam)_new.txt"
+		samtools view -H "$in_bam" | \
+			sed "s/BINDINGKIT=103-496-900;SEQUENCINGKIT=103-496-700/BINDINGKIT=102-739-100;SEQUENCINGKIT=102-118-800/" \
+			> "$new_header_file"
+		echo "Changing headers for input bam $in_base"
+		# The reheader can only be performed in-place with CRAMs, not BAMs
+		samtools reheader "$new_header_file" "$in_bam" > "$SLURM_TMPDIR/$in_base"
+	else
+		echo "Copying $in_base to scratch"
+		cp -v "$in_bam" "$SLURM_TMPDIR/$in_base"
+	fi
+	echo "Running Jasmine command:"
 	cat << EOF
 "$SLURM_TMPDIR"/jasmine \
 -j "$THREADS" \
@@ -158,3 +175,8 @@ EOF
 	rm -f "$SLURM_TMPDIR/$in_base" "$SLURM_TMPDIR/$in_base.pbi" "$SLURM_TMPDIR/$out_base" "$SLURM_TMPDIR/$out_base.pbi"
 	out_bams+=("$pbDir/$out_base")
 done
+
+# Only reached if every step above succeeded (set -e). run_jasmine.sh checks for this marker
+# to skip cells that were already successfully processed with this jasmine version.
+touch "$pbDir/.jasmine_${JASMINE_VERSION}.done"
+echo "Marked $pbDir as done for jasmine $JASMINE_VERSION"
