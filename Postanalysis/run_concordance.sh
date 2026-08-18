@@ -18,7 +18,7 @@ set -eo pipefail
 module load bcftools gatk/4.6.1.0 python/3.11
 
 usage() {
-    echo "Usage: $0 -n <sample_name> -v <lr_snv_vcf> -o <output_dir> -t <tools_folder> [-c <config_file>]"
+    echo "Usage: $0 -n <sample_name> -v <lr_snv_vcf> -f -o <output_dir> -t <tools_folder> [-c <config_file>]"
     1>&2; exit 1
 }
 
@@ -59,7 +59,7 @@ if [ ! -f "$lr_vcf" ]; then
 fi
 
 if [ ! -f "$fasta" ]; then
-    echo "Error: Fasta ref not found: $lr_vcf"
+    echo "Error: Fasta ref not found: $fasta"
     exit 1
 fi
 

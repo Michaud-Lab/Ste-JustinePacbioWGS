@@ -12,3 +12,7 @@ local_send_excel.sh
 .nextflow.log*
 Postanalysis/*log*
 Postanalysis/.nextflow/*
+*.log
+J-*.out
+*_error.json
+*.xlsx

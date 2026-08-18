@@ -36,8 +36,15 @@ if __name__ == "__main__":
 
 	#For each well folder, we need to retrieve the sample name from the metadata file
 	for well_folder in directory_list:
-		#The sample name is contained in this metadata file, in the pb_format folder
-		grep_command = f"grep -o \"BioSample Name=\".*\"\" {well_folder}/pb_formats/*_s*.hifi_reads.bc*.consensusreadset.xml | cut -f2 -d'\"' | tr -d '\n'"
+
+		hifi_bam_matches = list(Path(f"{well_folder}/hifi_reads").glob("*bc*.bam"))
+		if len(hifi_bam_matches) == 0:
+			sys.exit(f"Error: no *bc*.bam file found in {well_folder}/hifi_reads")
+		if len(hifi_bam_matches) > 1:
+			sys.exit(f"Error: expected exactly one *bc*.bam file in {well_folder}/hifi_reads, found {len(hifi_bam_matches)}: {[m.name for m in hifi_bam_matches]}")
+		hifi_prefix = hifi_bam_matches[0].stem
+		#The sample name is contained in this metadata file, in the pb_format folder		
+		grep_command = f"grep -o \"BioSample Name=\".*\"\" {well_folder}/pb_formats/{hifi_prefix}.consensusreadset.xml | cut -f2 -d'\"' | tr -d '\n'"
 		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
 		given_name = grep_result.stdout
 		#Special case for Decodeur Samples
