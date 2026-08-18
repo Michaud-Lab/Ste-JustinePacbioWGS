@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- Split the rclone GVCF download out of `Postanalysis/run_concordance.sh` into a new `Postanalysis/fetch_concordance_gvcf.sh`. Job nodes are slow/blocked for that transfer, which made the `sbatch` step take way too long; `postprocessPart1.sh` now runs the fetch synchronously on the login node for each sample (proband/parents) and only submits `run_concordance.sh` via `sbatch` if the download succeeds. `run_concordance.sh` itself now only does the GATK genotyping and SR/LR comparison, and errors out if the GVCF isn't already present.
+- Split the rclone GVCF download out of `Postanalysis/run_concordance.sh` into a new `Postanalysis/fetch_concordance_gvcf.sh`. Job nodes are slow/blocked for that transfer, which made the `sbatch` step take way too long; `postprocessPart1.sh` now runs the fetch synchronously on the login node for each sample (proband/parents) and only submits the sbatch job if the download succeeds. The remaining GATK genotyping and SR/LR comparison logic now only runs as an sbatch job, and errors out if the GVCF isn't already present; to reflect that, the script was renamed `run_concordance.sh` → `run_concordance.slurm`.
 
 ## 2026-08-18: Feat_monitor_benchmark
 

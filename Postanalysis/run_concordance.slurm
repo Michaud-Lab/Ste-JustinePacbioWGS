@@ -12,7 +12,7 @@
 # runs the GATK genotyping and calls sr-lr_vcf_concordance.py with the PacBio
 # normalized SNV VCF and the genotyped GVCF.
 #
-# Usage: run_concordance.sh -n <sample_name> -v <lr_snv_vcf> -o <output_dir> [-h <here_folder>]
+# Usage: run_concordance.slurm -n <sample_name> -v <lr_snv_vcf> -o <output_dir> [-h <here_folder>]
 #   -n  Sample name (used to locate the already-downloaded GVCF)
 #   -v  Path to the PacBio normalized SNV VCF (from postprocessPart1.sh)
 #   -o  Output directory (a Concordance/ subdirectory should already exist inside it)

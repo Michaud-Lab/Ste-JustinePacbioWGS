@@ -4,8 +4,8 @@
 #
 # This is meant to be run directly on the login node (NOT inside an sbatch job) —
 # job nodes on some clusters have slow or no direct internet/staging access, which
-# made the rclone step inside run_concordance.sh take way too long. Run this first,
-# then submit run_concordance.sh (which now assumes the GVCF is already local) via sbatch.
+# made the rclone step inside run_concordance.slurm take way too long. Run this first,
+# then submit run_concordance.slurm (which now assumes the GVCF is already local) via sbatch.
 #
 # Usage: fetch_concordance_gvcf.sh -n <sample_name> -o <output_dir> [-c <config_file>] [-l <log_file>]
 #   -n  Sample name (used to locate the GVCF on staging_juno)
