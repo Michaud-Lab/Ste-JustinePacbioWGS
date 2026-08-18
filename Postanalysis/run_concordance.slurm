@@ -6,19 +6,22 @@
 #SBATCH --time=05:00:00
 
 # Runs SR/LR VCF concordance for a single sample.
-# Fetches the Illumina GVCF from the staging server via rclone, then calls
-# sr-lr_vcf_concordance.py with the PacBio normalized SNV VCF and the GVCF.
+# Expects the Illumina GVCF to already be present in <output_dir>/Concordance/ —
+# fetch it first by running fetch_concordance_gvcf.sh directly (not via sbatch),
+# since job nodes can be slow/blocked for the rclone transfer. This script then
+# runs the GATK genotyping and calls sr-lr_vcf_concordance.py with the PacBio
+# normalized SNV VCF and the genotyped GVCF.
 #
-# Usage: run_concordance.sh -n <sample_name> -v <lr_snv_vcf> -o <output_dir> [-h <here_folder>] [-c <config_file>]
-#   -n  Sample name (used to locate the GVCF on staging_juno)
+# Usage: run_concordance.slurm -n <sample_name> -v <lr_snv_vcf> -o <output_dir> [-h <here_folder>]
+#   -n  Sample name (used to locate the already-downloaded GVCF)
 #   -v  Path to the PacBio normalized SNV VCF (from postprocessPart1.sh)
-#   -o  Output directory (a Concordance/ subdirectory will be created inside it)
+#   -o  Output directory (a Concordance/ subdirectory should already exist inside it)
 
 set -eo pipefail
 module load bcftools gatk/4.6.1.0 python/3.11
 
 usage() {
-    echo "Usage: $0 -n <sample_name> -v <lr_snv_vcf> -f -o <output_dir> -t <tools_folder> [-c <config_file>]"
+    echo "Usage: $0 -n <sample_name> -v <lr_snv_vcf> -f -o <output_dir> -t <tools_folder>"
     1>&2; exit 1
 }
 
@@ -29,8 +32,7 @@ lr_vcf=""
 output_dir=""
 fasta="$SCRATCH/GATK_references/Homo_sapiens_assembly38.fasta"
 log_file=""
-config_file="$here_folder/../.myconf.json"
-while getopts ":n:v:o:f:t:l:c:" opt; do
+while getopts ":n:v:o:f:t:l:" opt; do
     case "${opt}" in
         n)  sample_name="${OPTARG}" ;;
         v)  lr_vcf="${OPTARG}" ;;
@@ -40,7 +42,6 @@ while getopts ":n:v:o:f:t:l:c:" opt; do
             here_folder="$tools_folder/../Postanalysis/"
             ;;
         l)  log_file="${OPTARG}" ;;
-        c)  config_file="${OPTARG}" ;;
         :)  echo "Error: -${OPTARG} requires an argument."; usage ;;
         *)  usage ;;
     esac
@@ -63,57 +64,22 @@ if [ ! -f "$fasta" ]; then
     exit 1
 fi
 
-REMOTE_BASE_PREFIX=$(jq -r '.Rclone.short_reads_depot' "$config_file")
-
 concordance_dir="$output_dir/Concordance"
 mkdir -p "$concordance_dir"
 
 report_file="$concordance_dir/concordance_report_${sample_name}.txt"
-remote_dir="${REMOTE_BASE_PREFIX}/${sample_name}"
 sr_gvcf_name="${sample_name}.dragen.hard-filtered.gvcf.gz"
 sr_vcf="$concordance_dir/${sample_name}.dragen.hard-filtered.vcf.gz"
-
-if [ ! -f "$concordance_dir/$sr_gvcf_name" ] && [ ! -f $sr_vcf ]; then
-    # ── Locate GVCF on staging server ────────────────────────────────────────────
-    echo "Searching for ${sr_gvcf_name} on ${remote_dir} with command:"
-    cat << EOF 
-rclone lsf --format "tp" --files-only -R --include "$sr_gvcf_name" "$remote_dir"
-EOF
-    remote_listing=$(rclone lsf --format "tp" --files-only -R --include "$sr_gvcf_name" "$remote_dir" 2>/dev/null || true)
-
-    if [ -z "$remote_listing" ]; then
-        echo "WARNING: ${sr_gvcf_name} not found on staging_juno for sample ${sample_name}. Skipping concordance."
-        exit 0
-    else echo "Found these results:" ; echo "$remote_listing"
-    fi
-
-    result_count=$(echo "$remote_listing" | wc -l)
-    if [ "$result_count" -gt 1 ]; then
-        echo "Found ${result_count} matches for ${sr_gvcf_name} — selecting the most recent."
-    fi
-    # Each line is "YYYY-MM-DD HH:MM:SS path"; reverse-sort picks the most recent, awk extracts the path
-    remote_result=$(echo "$remote_listing" | sort -r | head -1 | awk -F';' '{print $NF}')
-        
-    # ── Download GVCF (and index if available) ───────────────────────────────────
-    echo "Found: ${remote_result} — downloading to ${concordance_dir}/ with command:"
-    cat << EOF
-rclone copy "${remote_dir}/${remote_result}"      "$concordance_dir/"
-EOF
-    rclone copy "${remote_dir}/${remote_result}"      "$concordance_dir/"
-    rclone copy "${remote_dir}/${remote_result}.tbi"  "$concordance_dir/" 2>/dev/null || true
-
-    sr_gvcf="${concordance_dir}/${sr_gvcf_name}"
-
-    if [ ! -f "$sr_gvcf" ]; then
-        echo "ERROR: Download of ${sr_gvcf_name} failed."
-        exit 1
-    fi
-
-else echo "skipping download"
-fi
 sr_gvcf="${concordance_dir}/${sr_gvcf_name}"
+
+if [ ! -f "$sr_gvcf" ] && [ ! -f "$sr_vcf" ]; then
+    echo "ERROR: Neither ${sr_gvcf_name} nor $(basename "$sr_vcf") found in ${concordance_dir}."
+    echo "Run fetch_concordance_gvcf.sh -n \"$sample_name\" -o \"$output_dir\" first to download the short-read GVCF."
+    exit 1
+fi
+
 # Index locally if the remote .tbi was absent
-if [ ! -f "${sr_gvcf}.tbi" ]; then
+if [ -f "$sr_gvcf" ] && [ ! -f "${sr_gvcf}.tbi" ]; then
     echo "Indexing ${sr_gvcf_name}..."
     gatk IndexFeatureFile -I "$sr_gvcf"
 fi
@@ -125,6 +91,7 @@ if [ ! -f $sr_vcf ]; then
         --reference "$fasta"
     echo "Gatk Genotype done for sr_gvcf"
     rm "$sr_gvcf"
+    rm "$sr_gvcf.tbi"
 fi
 #------Set up virtual env ------#
 ENVDIR=$tools_folder/ENV
@@ -154,10 +121,6 @@ EOF
 
     echo "Concordance report written to: ${report_file}"
 fi
-
-
-
-
 
 # Backup report with intervals:
 deactivate

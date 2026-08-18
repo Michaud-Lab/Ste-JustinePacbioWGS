@@ -129,11 +129,24 @@ rclone ls staging_juno:/pragmatiq-staging-sd4h/data/[sample_name]
 
 ---
 
-- **run_concordance.sh**
-  - *Usage*: `sbatch Postanalysis/run_concordance.sh -n <sample_name> -v <lr_snv_vcf> -o <output_dir> [-f <fasta>] [-t <tools_folder>] [-l <log_file>]`
-  - *Goal*: Verifies that a PacBio long-read VCF and its matching Illumina short-read GVCF originate from the same patient by computing genotype concordance across shared SNV sites (expected ≥ 90 % for same-patient pairs). Also runs a secondary 44-SNP fingerprint check with `bcftools isec` for quick confirmation.
+- **fetch_concordance_gvcf.sh**
+  - *Usage*: `bash Postanalysis/fetch_concordance_gvcf.sh -n <sample_name> -o <output_dir> [-c <config_file>] [-l <log_file>]`
+  - *Goal*: Downloads a sample's Illumina short-read GVCF from the staging server via `rclone`, ahead of `run_concordance.slurm`. Split out from `run_concordance.slurm` and run directly on the login node (not via `sbatch`) because job nodes can be very slow/blocked for this transfer (or completely impossible on Narval/Rorqual); `postprocessPart1.sh` calls this synchronously for each sample before submitting the `sbatch` job.
   - *Arguments*:
     - `-n` Sample name — used to locate the GVCF on `staging_juno:/pragmatiq-staging-sd4h/data/<sample_name>/`
+    - `-o` Output directory; the GVCF is written under `<output_dir>/Concordance/`
+    - `-c` Config file (for the `Rclone.short_reads_depot` path)
+    - `-l` Status log file
+  - *Outputs*: `<output_dir>/Concordance/<sample>.dragen.hard-filtered.gvcf.gz` (and its `.tbi` if present remotely).
+  - *Exit codes*: `0` already local or downloaded successfully; `1` download error; `2` GVCF not found on staging (concordance should be skipped for this sample).
+
+---
+
+- **run_concordance.slurm**
+  - *Usage*: `sbatch Postanalysis/run_concordance.slurm -n <sample_name> -v <lr_snv_vcf> -o <output_dir> [-f <fasta>] [-t <tools_folder>] [-l <log_file>]`
+  - *Goal*: Verifies that a PacBio long-read VCF and its matching Illumina short-read GVCF originate from the same patient by computing genotype concordance across shared SNV sites (expected ≥ 90 % for same-patient pairs). Also runs a secondary 44-SNP fingerprint check with `bcftools isec` for quick confirmation.
+  - *Arguments*:
+    - `-n` Sample name — used to locate the already-downloaded GVCF under `<output_dir>/Concordance/`
     - `-v` Normalized PacBio SNV VCF (`.vcf.gz`), produced by `postprocessPart1.sh`
     - `-o` Output directory; results are written under `<output_dir>/Concordance/`
     - `-f` Reference FASTA (default: `$SCRATCH/GATK_references/Homo_sapiens_assembly38.fasta`)
@@ -143,7 +156,7 @@ rclone ls staging_juno:/pragmatiq-staging-sd4h/data/[sample_name]
     - `concordance_report_<sample>.txt` — full genotype concordance report from `sr-lr_vcf_concordance.py`
     - `Isec/<sample>_summary.txt` — 44-SNP position summary (number of non-ref variants found)
     - `Isec/<sample>_report.txt` — list of mismatched positions (empty if none)
-  - *Notes*: Downloads the GVCF via `rclone` (requires `staging_juno` remote configured). Converts the GVCF to VCF with GATK `GenotypeGVCFs` before comparison. Skips gracefully if the GVCF is not found on the staging server. The 44-SNP BED file is expected at `$SCRATCH/SNPs44.bed`.
+  - *Notes*: Requires `fetch_concordance_gvcf.sh` to have already downloaded the GVCF into `<output_dir>/Concordance/` — exits with an error otherwise. Converts the GVCF to VCF with GATK `GenotypeGVCFs` before comparison. The 44-SNP BED file is expected at `$SCRATCH/SNPs44.bed`.
 
 ---
 
@@ -160,7 +173,7 @@ rclone ls staging_juno:/pragmatiq-staging-sd4h/data/[sample_name]
     - **SAME PATIENT** (≥ 90 % genotype concordance on shared SNVs)
     - **AMBIGUOUS** (75–90 %)
     - **LIKELY DIFFERENT PATIENTS** (< 75 %)
-  - *Notes*: Requires `cyvcf2` and `numpy` (available via the `Tools/ENV` virtualenv). Called automatically by `run_concordance.sh`; can also be run standalone for ad-hoc comparisons.
+  - *Notes*: Requires `cyvcf2` and `numpy` (available via the `Tools/ENV` virtualenv). Called automatically by `run_concordance.slurm`; can also be run standalone for ad-hoc comparisons.
 
 ---
 
