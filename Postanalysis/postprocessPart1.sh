@@ -20,7 +20,7 @@ set -eo pipefail
 module load python/3.11 htslib/1.22.1 bcftools/1.22 bedtools/2.31.0 apptainer/1.3.5 arrow/21.0.0 libyaml
 
 usage() { 
-	printf "Usage: \n $0 [-i <familyID>]  [-g <group (i.e. prag,decode,valid /p,d,v)>] \n
+	printf "Usage: \n $0 [-i <familyID>]  [-g <group (i.e. prag,decode,valid,c4r /p,d,v,c)>] \n
  [-s {to run every step, otherwise will enter interactive mode}] \n
  [-c <Optional_config_file>] \n" 
  1>&2; exit 1; }
@@ -37,18 +37,22 @@ while getopts "i:c:g:s" o; do
 			;;
 		g)
 			group=${OPTARG}
-			if [ "$group" == "Pragmatiq" ] || [ "$group" == "prag" ] || [ "$group" == "p" ]; then
+			if [ "${group,,}" == "pragmatiq" ] || [ "${group,,}" == "prag" ] || [ "${group,,}" == "p" ]; then
 				echo "Using Pragmatiq group"
 				group_name="Pragmatiq"
 				group_code="prag"
-			elif [ "$group" == "Decodeur" ] || [ "$group" == "decode" ] || [ "$group" == "d" ]; then
+			elif [ "${group,,}" == "decodeur" ] || [ "${group,,}" == "decode" ] || [ "${group,,}" == "d" ]; then
 				echo "Using Decodeur group"
 				group_name="Decodeur"
 				group_code="decode"
-			elif [ "$group" == "Validation" ] || [ "$group" == "valid" ] || [ "$group" == "v" ]; then
+			elif [ "${group,,}" == "validation" ] || [ "${group,,}" == "valid" ] || [ "${group,,}" == "v" ]; then
 				echo "Using Validation group"
 				group_name="Validation"
 				group_code="validation"
+			elif [ "${group,,}" == "c4r" ] || [ "${group,,}" == "c" ]; then
+				echo "Using Care4Rare group"
+				group_name="Care4Rare"
+				group_code="C4R"
 			else 
 				echo "Use either 'Pragmatiq' or 'Decodeur' or 'Validation' for group name or their code 'prag' or 'decode', 'valid' or 'p','d' or 'v'"
 				exit
