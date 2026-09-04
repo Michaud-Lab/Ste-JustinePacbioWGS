@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
  
 ## [Unreleased]
+
+## 2026-09-04: Feat-C4R_group
+
+### Added
+
+- Added special case support for Care4Rare (C4R) samples in `Preanalysis/getSamples.py` (samples starting with C4R) and a group code and assignment in `Preanalysis/postprocessPart1.sh`
+
 ## 2026-08-18: Fix-Concordance_offline
 
 ### Changed

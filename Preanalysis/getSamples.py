@@ -47,24 +47,31 @@ if __name__ == "__main__":
 		grep_command = f"grep -o \"BioSample Name=\".*\"\" {well_folder}/pb_formats/{hifi_prefix}.consensusreadset.xml | cut -f2 -d'\"' | tr -d '\n'"
 		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
 		given_name = grep_result.stdout
-		#Special case for Decodeur Samples
-		if given_name[0:3] == "HSJ":
+		#Special case for Decodeur and Care for rare (C4R) samples
+		if given_name[0:3] == "HSJ" or given_name[0:3] == "C4R":
 			family_name = given_name[:-3]
 			if given_name[-2:] == "03" or given_name[-2:] == "04":
 				role = "proband"
 				gender = ""
+				affected = True
 			elif given_name[-2:] == "02":
 				role = f"mother of {family_name}-03"
 				gender = "Female"
+				affected = False
 			elif given_name[-2:] == "01":
 				role = f"father of {family_name}-03"
 				gender = "Male"
+				affected = False
 			else:
-				print(f"Decodeur name didn't end with 01,02,03 or 04? Received:{given_name[-2:]}")
+				print(f"Decodeur/C4R name didn't end with 01,02,03 or 04? Received:{given_name[-2:]}")
 				sys.exit()
 
-			status = {"Status": "Decodeur", "Role":role, "Gender":gender, "Affected": False}
-			study = "Decodeur"
+			if given_name[0:3] == "HSJ":
+				study = "Decodeur"
+			elif given_name[0:3] == "C4R":
+				study = "C4R"
+			status = {"Status":study, "Role":role, "Gender":gender, "Affected": affected}
+			
 		else:
 			status = {}
 			study = ""
