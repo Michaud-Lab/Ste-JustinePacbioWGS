@@ -12,7 +12,7 @@
 # runs the GATK genotyping and calls sr-lr_vcf_concordance.py with the PacBio
 # normalized SNV VCF and the genotyped GVCF.
 #
-# Usage: run_concordance.slurm -n <sample_name> -v <lr_snv_vcf> -o <output_dir> [-h <here_folder>]
+# Usage: run_concordance.slurm -n <sample_name> -v <lr_snv_vcf> -o <output_dir> -c <config_file>
 #   -n  Sample name (used to locate the already-downloaded GVCF)
 #   -v  Path to the PacBio normalized SNV VCF (from postprocessPart1.sh)
 #   -o  Output directory (a Concordance/ subdirectory should already exist inside it)
@@ -25,22 +25,18 @@ usage() {
     1>&2; exit 1
 }
 
-here_folder="$(cd "$(dirname "$0")" && pwd)"
-tools_folder="$here_folder/../Tools"
 sample_name=""
 lr_vcf=""
 output_dir=""
 fasta="$SCRATCH/GATK_references/Homo_sapiens_assembly38.fasta"
 log_file=""
-while getopts ":n:v:o:f:t:l:" opt; do
+while getopts ":n:v:o:f:l:c:" opt; do
     case "${opt}" in
         n)  sample_name="${OPTARG}" ;;
         v)  lr_vcf="${OPTARG}" ;;
         o)  output_dir="${OPTARG}" ;;
         f)  fasta="${OPTARG}" ;; # Note that this fasta requires a dict to run GATK commands
-        t)  tools_folder="${OPTARG}"
-            here_folder="$tools_folder/../Postanalysis/"
-            ;;
+        c)  config_file="${OPTARG}" ;;
         l)  log_file="${OPTARG}" ;;
         :)  echo "Error: -${OPTARG} requires an argument."; usage ;;
         *)  usage ;;
@@ -62,6 +58,25 @@ fi
 if [ ! -f "$fasta" ]; then
     echo "Error: Fasta ref not found: $fasta"
     exit 1
+fi
+
+if [[ -z "$config_file" ]]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [[ -z "$config_file" ]]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	usage
+fi
+if [[ ! -f "$config_file" ]]; then
+	echo "Config file not found: $config_file" 1>&2
+	exit 1
+fi
+
+script_dir="$(jq -r '.Paths.WGS_folder' "$config_file")/Postanalysis"
+tools_dir="$script_dir/../Tools"
+if [ ! -d "$script_dir" ] || [ ! -d "$tools_dir" ]; then
+	echo "Postanalysis or Tools folder not found: $script_dir or $tools_dir" 1>&2
+	exit 1
 fi
 
 concordance_dir="$output_dir/Concordance"
@@ -94,7 +109,7 @@ if [ ! -f $sr_vcf ]; then
     rm "$sr_gvcf.tbi"
 fi
 #------Set up virtual env ------#
-ENVDIR=$tools_folder/ENV
+ENVDIR=$tools_dir/ENV
 if [ -d "$ENVDIR" ]; then
     echo "Activating Venv"
 	source $ENVDIR/bin/activate
@@ -102,19 +117,19 @@ else
 	virtualenv --no-download $ENVDIR
 	source $ENVDIR/bin/activate
 	pip install --no-index --upgrade pip
-	pip install -r "$tools_folder/requirements.txt"
+	pip install -r "$tools_dir/requirements.txt"
 fi
 
 if [ ! -f "${report_file}" ]; then
     # ── Run concordance ───────────────────────────────────────────────────────────
     echo "Running SR/LR concordance for ${sample_name} with command:"
     cat << EOF
-python3 "${here_folder}/sr-lr_vcf_concordance.py" \
+python3 "${script_dir}/sr-lr_vcf_concordance.py" \
     --vcf1 "$lr_vcf" \
     --vcf2 "$sr_vcf" \
     --output "$report_file"
 EOF
-    python3 "${here_folder}/sr-lr_vcf_concordance.py" \
+    python3 "${script_dir}/sr-lr_vcf_concordance.py" \
         --vcf1 "$lr_vcf" \
         --vcf2 "$sr_vcf" \
         --output "$report_file"

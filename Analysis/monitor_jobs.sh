@@ -23,7 +23,10 @@
 # NOTE: this reports requested/allocated resources as seen by squeue, not
 # measured (sstat) usage - that's what matters for sizing future submissions.
 #
-# Usage: sbatch monitor_wdl_jobs.sh [interval_seconds] [job_name_filter]
+# Usage: sbatch monitor_jobs.sh [-c config_file] [interval_seconds] [job_name_filter]
+#   -c config_file   : config file with a Paths.WGS_folder entry. Defaults to
+#                      the WGS_CONFIG_FILE environment variable; if neither is
+#                      set, usage is printed and the script exits.
 #   interval_seconds : how often to poll (default 600 = 10 min)
 #   job_name_filter  : optional squeue -n glob/name filter, e.g. a common
 #                      prefix used by miniwdl task jobs. Default: all jobs
@@ -34,7 +37,45 @@
 
 set -uo pipefail
 
-SCRIPT_DIR="/home/felixant/scratch/Ste-JustinePacbioWGS/Analysis"
+usage() {
+	printf "Usage: sbatch monitor_jobs.sh [-c config_file] [interval_seconds] [job_name_filter]\n
+ config_file must contain a 'Paths.WGS_folder' entry. If -c is not given, the\n
+ WGS_CONFIG_FILE environment variable is used instead (e.g. 'export WGS_CONFIG_FILE=\$SCRATCH/Ste-JustinePacbioWGS/.myconf.json').\n
+ There is no built-in default: one of the two must be provided.\n" 1>&2
+	exit 1
+}
+
+config_file=""
+while getopts "c:" o; do
+	case "${o}" in
+		c)
+			config_file="${OPTARG}"
+			;;
+		*)
+			usage
+			;;
+	esac
+done
+shift $((OPTIND - 1))
+
+if [[ -z "$config_file" ]]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [[ -z "$config_file" ]]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	usage
+fi
+if [[ ! -f "$config_file" ]]; then
+	echo "Config file not found: $config_file" 1>&2
+	exit 1
+fi
+
+SCRIPT_DIR="$(jq -r '.Paths.WGS_folder' "$config_file")/Analysis"
+if [[ ! -d "$SCRIPT_DIR" ]]; then
+	echo "Analysis directory not found: $SCRIPT_DIR" 1>&2
+	exit 1
+fi
+
 INTERVAL="${1:-600}"
 NAME_FILTER="${2:-}"
 SELF_JOB_ID="${SLURM_JOB_ID:-$$}"

@@ -151,6 +151,8 @@ else
 	echo "Loading environment"
 	pip install -r "$tools_folder/requirements.txt"
 fi
+echo "Globus command:"
+echo "globus transfer --label $family_id-transfer -r ${source_collection}:$directory ${destination_collection}:${destination_path}/$family_id"
 globus transfer --label $family_id-transfer -r "${source_collection}:$directory" "${destination_collection}:${destination_path}/$family_id"
 log_step "SUCCESS: globus transfer for ${family_id}"
 if [ -n "${send_status_log:-}" ]; then

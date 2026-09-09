@@ -28,7 +28,7 @@ while getopts ":i:c:" o; do
     esac
 done
 
-if [ -z "${id}" ] || [ -z "${config_file}" ]; then
+if [ -z "${id:-}" ] || [ -z "${config_file}" ]; then
     usage
 fi
 if [ ! -f "${config_file}" ]; then

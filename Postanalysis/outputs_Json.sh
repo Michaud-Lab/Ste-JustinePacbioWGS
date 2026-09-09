@@ -38,9 +38,16 @@ if [ -z "${family_id:-}" ] || [ -z "${directory:-}" ]; then
 	usage
 fi
 
-if [ ! -f "$config_file" ]; then
-	echo "Could not find config file $config_file"
-	exit
+if [[ -z "$config_file" ]]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [[ -z "$config_file" ]]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	usage
+fi
+if [[ ! -f "$config_file" ]]; then
+	echo "Config file not found: $config_file" 1>&2
+	exit 1
 fi
 
 touch cleanupReport.txt
@@ -137,10 +144,10 @@ REMOTE_BASE_PREFIX=$(jq -r '.Rclone.s3_bam_storage // empty' "$config_file")
 if [ -z "${REMOTE_BASE_PREFIX:-}" ]; then
     echo "Rclone.s3_bam_storage not set in config — skipping rclone send."
 else
-    here_folder="$(cd "$(dirname "$0")" && pwd)"
+    script_dir="$(jq -r '.Paths.WGS_folder' "$config_file")/Postanalysis"
     echo "Submitting rclone send to $REMOTE_BASE_PREFIX/$family_id as a Slurm job"
     rclone_job_id=$(sbatch --parsable -D "$directory" \
-        "$here_folder/rclone_send.slurm" \
+        "$script_dir/rclone_send.slurm" \
         -s "$s3_fir/$family_id" \
         -d "$REMOTE_BASE_PREFIX/$family_id")
     echo "Rclone job submitted (job_id=$rclone_job_id)"

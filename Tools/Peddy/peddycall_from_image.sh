@@ -23,10 +23,10 @@ for var in "$@"; do
  echo $var
 done
 
-usage() { echo "Usage: $0 -i <familyID> -p <proband_name> -1 <parent_1_name> [-2 <parent_2_name>] -d <input_directory>" 1>&2; exit 1; }
+usage() { echo "Usage: $0 -i <familyID> -p <proband_name> -1 <parent_1_name> [-2 <parent_2_name>] -d <input_directory> -c <config_file>" 1>&2; exit 1; }
 parent_2_name=""
 log_file=""
-while getopts ":p:1:2:i:d:l:" o; do
+while getopts ":p:1:2:i:d:l:c:" o; do
     case "${o}" in
         p) proband_name=${OPTARG} ;;
         1) parent_1_name=${OPTARG} ;;
@@ -34,6 +34,7 @@ while getopts ":p:1:2:i:d:l:" o; do
         i) family_id=${OPTARG} ;;
         d) input_directory=${OPTARG} ;;
         l) log_file=${OPTARG} ;;
+		c) config_file=${OPTARG} ;;
 		*) usage ;;
     esac
 done
@@ -42,7 +43,24 @@ trap 'rc=$?; [ $rc -ne 0 ] && [ -n "${log_file:-}" ] && echo "[$(date +%Y-%m-%dT
 if [ -z "${proband_name:-}" ] || [ -z "${parent_1_name:-}" ] || [ -z "${family_id:-}" ]; then
 	usage
 fi
-here_folder=$(realpath $(dirname $0))
+
+if [[ -z "${config_file:-}" ]]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [[ -z "${config_file:-}" ]]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	usage
+fi
+if [[ ! -f "$config_file" ]]; then
+	echo "Config file not found: $config_file" 1>&2
+	exit 1
+fi
+
+script_dir="$(jq -r '.Paths.WGS_folder' "$config_file")/Tools"
+if [[ ! -d "$script_dir" ]]; then
+	echo "Analysis directory not found: $script_dir" 1>&2
+	exit 1
+fi
 
 # Setup the images
 if [ -z ${APPTAINER_CACHEDIR:-} ]; then
@@ -57,7 +75,7 @@ fi
 image="$APPTAINER_CACHEDIR/peddy_v0.4.8.sif"
 if [ ! -f "$image" ]; then
 	echo "Building Peddy apptainer image"
-	apptainer build "$image" "$here_folder/peddy.def"
+	apptainer build "$image" "$script_dir/peddy.def"
 fi
 
 

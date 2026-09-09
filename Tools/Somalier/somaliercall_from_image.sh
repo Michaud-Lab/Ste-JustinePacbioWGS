@@ -84,7 +84,6 @@ if [ ! -d "$APPTAINER_CACHEDIR/1kg-somalier" ]; then
     tar -xzf "$APPTAINER_CACHEDIR/1kg.somalier.tar.gz" -C "$APPTAINER_CACHEDIR/"
 fi
 
-here_folder=$(realpath $(dirname $0))
 image=$APPTAINER_CACHEDIR/somalier-v0.3.1.sif
 if [ ! -f "$APPTAINER_CACHEDIR/somalier-v0.3.1.sif" ]; then
     echo "Downloading Somalier container"
