@@ -73,6 +73,7 @@ The config file follows this format. See `configTemplate.json` for a template. T
 		},
 	"Paths":
 		{
+			"WGS_folder": "/home/felixant/scratch/Ste-JustinePacbioWGS",
 			"run_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/",
 			"ref_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.ref_map.v2p0p0.tsv",
 			"sample_sheet_path": "/home/felixant/scratch/SampleSheet/",
@@ -105,6 +106,7 @@ The config file follows this format. See `configTemplate.json` for a template. T
 
 | Field | Description |
 |-------|-------------|
+| `WGS_folder` | Directory where this repo was cloned. It is required for many scripts that need to interact with other scripts |
 | `run_path` | Directory containing raw runs from the Revio sequencer, organized as `{run_id}/{plate}/{sample}/` |
 | `ref_maps` | Path to the WGS pipeline reference map TSV (from the resource bundle at [Zenodo 14027047](https://zenodo.org/records/14027047)) |
 | `tertiary_maps` | Path to the WGS pipeline tertiary map TSV |

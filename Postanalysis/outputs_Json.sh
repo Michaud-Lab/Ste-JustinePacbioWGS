@@ -10,15 +10,15 @@ destination_path="$HOME/projects/ctb-rallard/COMMUN/PacBioData/OutputFamilies"
 #Arguments:
 # $-i <familyID>
 # $-d <directory to clean>
-# $-c <optional config file (default .myconf.json)>
+# $-c <optional config file (default env var WGS_CONFIG_FILE)>
 
 set -eu
 echo "outputs_Json.sh Arguments:"
 for var in "$@"; do
  echo $var
 done
-usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>]" 1>&2; exit 1; }
-config_file="$(dirname $0)/../.myconf.json"
+usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default env var WGS_CONFIG_FILE)>]" 1>&2; exit 1; }
+config_file=""
 while getopts ":i:d:c:" o; do
     case "${o}" in
         i)	family_id=${OPTARG}	;;

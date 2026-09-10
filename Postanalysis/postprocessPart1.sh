@@ -22,7 +22,7 @@ module load python/3.11 htslib/1.22.1 bcftools/1.22 bedtools/2.31.0 apptainer/1.
 usage() { 
 	printf "Usage: \n $0 [-i <familyID>]  [-g <group (i.e. prag,decode,valid,c4r /p,d,v,c)>] \n
  [-s {to run every step, otherwise will enter interactive mode}] \n
- [-c <Optional_config_file>] \n" 
+ [-c <Optional_config_file, default env var WGS_CONFIG_FILE>] \n" 
  1>&2; exit 1; }
 
 run_all=false
@@ -149,7 +149,7 @@ function UnifyVCF() {
 	local unify_output="$directory/$1-unifiedTrioVCFv2.vcf.gz"
 	echo "Unifying VCFs for $1" >> "$report_file"
 if [ ! -f "$unify_output" ]; then
-	python3 $script_dir/geneyx.analysis.api_CHUSJ/scripts/UnifyVcf/PacBioUnifyVcf.py \
+	python3 "$script_dir"/geneyx.analysis.api_CHUSJ/scripts/UnifyVcf/PacBioUnifyVcf.py \
 		-o "$directory/$1-unifiedTrioVCFv2.vcf" \
 		-s "$3" -r "$2" -c $3 \
 		-b $script_dir/geneyx.analysis.api_CHUSJ/scripts/UnifyVcf/STRchive-disease-loci.hg38.TRGT.bed >> "$report_file" 2>&1

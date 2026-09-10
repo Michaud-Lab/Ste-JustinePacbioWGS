@@ -12,8 +12,8 @@ echo "cleanup.sh Arguments:"
 for var in "$@"; do
  echo $var
 done
-usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>]" 1>&2; exit 1; }
-config_file="$(dirname $0)/../.myconf.json"
+usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default env var WGS_CONFIG_FILE)>]" 1>&2; exit 1; }
+config_file=""
 while getopts ":i:d:c:" o; do
     case "${o}" in
         i)
@@ -39,9 +39,16 @@ if [ -z "${family_id:-}" ] || [ -z "${directory:-}" ]; then
 	usage
 fi
 
+if [[ -z "$config_file" ]]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [[ -z "$config_file" ]]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	usage
+fi
 if [ ! -f "$config_file" ]; then
 	echo "Could not find config file $config_file"
-	exit
+	exit 1
 fi
 
 samplesheet_dir=$(jq -r ".Paths.sample_sheet_path" $config_file)

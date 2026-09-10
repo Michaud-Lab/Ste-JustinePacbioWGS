@@ -32,13 +32,12 @@ if [ -z "$run_id" ]; then
 fi
 # default value for config
 if [ ! -f "$config_file" ]; then
-	if [ -f "$(dirname "$0")/.myconf.json" ]; then
-		config_file="$(dirname "$0")/.myconf.json"
-	else
-		echo "config file not found: $config_file. You can input one with option '-c', or export a path to 'WGS_CONFIG_FILE' to set a default"
-		exit 1
-	fi
+	echo "config file not found: $config_file. You can input one with option '-c', or export a path to 'WGS_CONFIG_FILE' to set a default"
+	exit 1
 fi
+
+#Folder of the repo
+scripts_folder=$(jq -r '.Paths.WGS_folder' "$config_file")
 
 # run_path in the config points to the folder containing one subfolder per run;
 # the run itself contains one subfolder per well/cell (ie 1_A01, 1_B01...)
@@ -49,7 +48,7 @@ if [ ! -d "$run_folder" ]; then
 	exit 1
 fi
 # Tracks which cell folder maps to which submitted Slurm job ID, for later follow-up
-overall_job_log="$(dirname $0)/jasmine_run_$run_id.log"
+overall_job_log="$scripts_folder/jasmine_run_$run_id.log"
  >"$overall_job_log"
 for cell_folder in "$run_folder"/*/; do
 	echo "Cell folder: $cell_folder"
@@ -80,8 +79,8 @@ for cell_folder in "$run_folder"/*/; do
 	fi
 	xml_file="${xml_matches[0]}"
 	echo "$xml_file"
-	echo "sbatch -D $cell_folder/pb_formats $(dirname $0)/jasmine.slurm -x $xml_file -t $JASMINE_VERSION -c $config_file"
-	job_id=$(sbatch --parsable -D "$cell_folder/pb_formats" "$(dirname $0)/jasmine.slurm" -x "$xml_file" -t "$JASMINE_VERSION" -c "$config_file")
+	echo "sbatch -D $cell_folder/pb_formats $scripts_folder/jasmine.slurm -x $xml_file -t $JASMINE_VERSION -c $config_file"
+	job_id=$(sbatch --parsable -D "$cell_folder/pb_formats" "$scripts_folder/jasmine.slurm" -x "$xml_file" -t "$JASMINE_VERSION" -c "$config_file")
 	echo "Submitted job $job_id"
 	echo "$cell_folder job id: $job_id" >>"$overall_job_log"
 done
