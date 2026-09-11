@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
+## 2026-09-11: Fix-default-config
+
+- Changed most instances of "dirname $0" in scripts and "here_folder" in arguments. The behavior of "dirname $0" is not consistent across clusters or node type (compute node or interactive node). Instead, added a required `WGS_folder` config argument in the `Paths`category. It must path to the directory of this repo. This makes the config file mandatory for most Postanalysis scripts, so I highly suggest setting a default config file path using the WGS_CONFIG_FILE environment variable. 
+
+
 ## 2026-09-04: Feat-C4R_group
 
 ### Added

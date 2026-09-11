@@ -21,7 +21,7 @@ set -eo pipefail
 module load bcftools gatk/4.6.1.0 python/3.11
 
 usage() {
-    echo "Usage: $0 -n <sample_name> -v <lr_snv_vcf> -f -o <output_dir> -t <tools_folder>"
+    echo "Usage: $0 -n <sample_name> -v <lr_snv_vcf> -f -o <output_dir>"
     1>&2; exit 1
 }
 

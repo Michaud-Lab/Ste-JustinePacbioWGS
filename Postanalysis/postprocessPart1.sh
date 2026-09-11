@@ -689,13 +689,13 @@ if [ "$include_svtopo" == true ] || [ "$run_all" == true ]; then
 	dependency_Proband="$(sbatch --parsable -J svtopo_${family_id}_proband \
 		-D $directory/SVTOPO_OUTPUTS $tools_folder/SVTopo/svtopocall_from_image.sh \
 		-p "$family_id-proband-${proband_name}" -b "$proband_bam" -i "$proband_bam_bai" \
-		-s "$supporting_reads" -v "$proband_SV" -r "$resource_folder" -o $directory -t $tools_folder -l "$log_file")"
+		-s "$supporting_reads" -v "$proband_SV" -r "$resource_folder" -o $directory -l "$log_file")"
 	echo "Find SVTopo report for proband: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_proband.$dependency_Proband.out" >> "$report_file"
 	log_step "SUBMITTED: svtopo_${family_id}_proband (job_id=$dependency_Proband)"
 	dependency_first_parent="$(sbatch --parsable -J svtopo_${family_id}_$first_parent_role \
 		-D $directory/SVTOPO_OUTPUTS $tools_folder/SVTopo/svtopocall_from_image.sh \
 		-p "$family_id-$first_parent_role-${first_parent_name}" -b "$first_parent_bam" -i "$first_parent_bam_bai" \
-		-s "$supporting_reads" -v "$first_parent_SV" -r "$resource_folder" -o $directory -t $tools_folder -l "$log_file")"
+		-s "$supporting_reads" -v "$first_parent_SV" -r "$resource_folder" -o $directory -l "$log_file")"
 	echo "Find SVTopo report for $first_parent_role: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_$first_parent_role.$dependency_first_parent.out" >> "$report_file"
 	log_step "SUBMITTED: svtopo_${family_id}_${first_parent_role} (job_id=$dependency_first_parent)"
 	dependencies+=("$dependency_Proband" "$dependency_first_parent")
@@ -703,7 +703,7 @@ if [ "$include_svtopo" == true ] || [ "$run_all" == true ]; then
 		dependency_second_parent="$(sbatch --parsable -J svtopo_${family_id}_$second_parent_role \
 			-D $directory/SVTOPO_OUTPUTS $tools_folder/SVTopo/svtopocall_from_image.sh \
 			-p "$family_id-$second_parent_role-${second_parent_name}" -b "$second_parent_bam" -i "$second_parent_bam_bai" \
-			-s "$supporting_reads" -v "$second_parent_SV" -r "$resource_folder" -o $directory -t $tools_folder -l "$log_file")"
+			-s "$supporting_reads" -v "$second_parent_SV" -r "$resource_folder" -o $directory -l "$log_file")"
 		echo "Find SVTopo report for $second_parent_role: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_$second_parent_role.$dependency_second_parent.out" >> "$report_file"
 		log_step "SUBMITTED: svtopo_${family_id}_${second_parent_role} (job_id=$dependency_second_parent)"
 		dependencies+=("$dependency_second_parent")

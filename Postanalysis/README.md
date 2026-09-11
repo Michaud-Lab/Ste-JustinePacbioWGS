@@ -98,7 +98,7 @@ rclone ls staging_juno:/pragmatiq-staging-sd4h/data/[sample_name]
 ---
 
 - **globus_cli_send.sh**
-  - *Usage*: `sbatch Postanalysis/globus_cli_send.sh -i <familyID> -d <directory> -m <duo|trio> [-t tools_folder] [-r] [-c config] [-l log_file] [-S send_status_log]`
+  - *Usage*: `sbatch Postanalysis/globus_cli_send.sh -i <familyID> -d <directory> -m <duo|trio> [-r] [-c config] [-l log_file] [-S send_status_log]`
   - *Goal*: Pre-flight check followed by a Globus transfer of the processed family directory from the working cluster (Fir) to Narval. The pre-flight check verifies that all required QC outputs exist (Peddy report, SVTopo HTML reports, Triomix PDF [trio only], MultiQC report, concordance reports). Fails fast with a `summary_report.txt` if any are missing.
   - *Arguments*:
     - `-i` Family ID
@@ -143,14 +143,13 @@ rclone ls staging_juno:/pragmatiq-staging-sd4h/data/[sample_name]
 ---
 
 - **run_concordance.slurm**
-  - *Usage*: `sbatch Postanalysis/run_concordance.slurm -n <sample_name> -v <lr_snv_vcf> -o <output_dir> [-f <fasta>] [-t <tools_folder>] [-l <log_file>]`
+  - *Usage*: `sbatch Postanalysis/run_concordance.slurm -n <sample_name> -v <lr_snv_vcf> -o <output_dir> [-f <fasta>] [-l <log_file>]`
   - *Goal*: Verifies that a PacBio long-read VCF and its matching Illumina short-read GVCF originate from the same patient by computing genotype concordance across shared SNV sites (expected ≥ 90 % for same-patient pairs). Also runs a secondary 44-SNP fingerprint check with `bcftools isec` for quick confirmation.
   - *Arguments*:
     - `-n` Sample name — used to locate the already-downloaded GVCF under `<output_dir>/Concordance/`
     - `-v` Normalized PacBio SNV VCF (`.vcf.gz`), produced by `postprocessPart1.sh`
     - `-o` Output directory; results are written under `<output_dir>/Concordance/`
     - `-f` Reference FASTA (default: `$SCRATCH/GATK_references/Homo_sapiens_assembly38.fasta`)
-    - `-t` Tools folder (for the Python virtualenv)
     - `-l` Status log file
   - *Outputs* (written to `<output_dir>/Concordance/`):
     - `concordance_report_<sample>.txt` — full genotype concordance report from `sr-lr_vcf_concordance.py`
@@ -241,7 +240,7 @@ The `Tools/` directory contains Apptainer-based wrappers for QC tools. Each is l
   - *Outputs*: `multiqc_report.html` in the current directory.
 
 - **SVTopo** (`Tools/SVTopo/svtopocall_from_image.sh`)
-  - *Usage*: `sbatch Tools/SVTopo/svtopocall_from_image.sh -p <prefix> -b <haplotagged_bam> -i <bam_index> -s <supporting_reads_json> -v <sv_vcf> -r <resource_folder> -o <output_dir> -t <tools_folder> [-l log_file]`
+  - *Usage*: `sbatch Tools/SVTopo/svtopocall_from_image.sh -p <prefix> -b <haplotagged_bam> -i <bam_index> -s <supporting_reads_json> -v <sv_vcf> -r <resource_folder> -o <output_dir> [-l log_file]`
   - *Goal*: Structural variant topology visualization. Produces interactive diagrams of complex SVs from the PacBio SV VCF, using a repeat-masker BED for annotation.
   - *Outputs* (written to `<output_dir>/SVTOPO_OUTPUTS/<prefix>_svtopo/`): `index.html` interactive report and per-SV diagram files.
 

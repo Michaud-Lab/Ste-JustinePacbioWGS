@@ -51,7 +51,7 @@ Most bash scripts (`globus_get_run.sh`, `postprocessPart1.sh`, etc.) will instal
 
 ## Config
 
-The config file follows this format. See `configTemplate.json` for a template. The default location is `.myconf.json` at the root of the repo. Use `-c` to supply an alternate path for any script.
+The config file follows this format. See `configTemplate.json` for a template. The default location can be defined with `WGS_CONFIG_FILE` as an environment variable. Use `-c` to supply an alternate path for any script.
 
 ```json
 {

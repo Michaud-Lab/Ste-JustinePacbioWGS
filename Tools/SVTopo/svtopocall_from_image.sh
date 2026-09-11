@@ -27,52 +27,57 @@ for var in "$@"; do
  echo $var
 done
 
-usage() { echo "Usage: $0  [-p <prefix>] [-b <haplotagged bam>] [-i <haplotagged bam index>] [-s <supporting reads>] [-v <SV vcf>] [-r <resource folder>] [-o <Output Dir>] [-t <tools folder>]" 1>&2; exit 1; }
+usage() { echo "Usage: $0  [-p <prefix>] [-b <haplotagged bam>] [-i <haplotagged bam index>] [-s <supporting reads>] [-v <SV vcf>] [-r <resource folder>] [-o <Output Dir>]" 1>&2; exit 1; }
 
 log_file=""
-while getopts ":p:b:i:r:v:o:s:t:l:" o; do
-    case "${o}" in
-        p)
-            echo "prefix: ${OPTARG}"
-            prefix=${OPTARG}
-            prefix=${prefix%%_*} #Prefix cannot contain underscores
-            echo "prefix after removing underscores: ${prefix}"
-            ;;
-        b)
-            haplotagged_bam=${OPTARG}
-            ;;
-        i)
-            haplotagged_bam_index=${OPTARG}
-      			;;
-		    s)
-            supporting_reads=${OPTARG}
-            ;;
-        v)
-            vcf=${OPTARG}
-            ;;
-	      r)
-            resource_folder=${OPTARG}
-            ;;
-        o)
-            outputDir=${OPTARG}
-            ;;
-        t)
-            tools_folder=${OPTARG}
-            ;;
-        l)
-            log_file=${OPTARG}
-            ;;
-	      *)
-            echo "Received invalid option"
-            usage
-            ;;
-    esac
+config_file=""
+while getopts ":p:b:i:r:v:o:s:c:l:" o; do
+	case "${o}" in
+		p)
+			echo "prefix: ${OPTARG}"
+			prefix=${OPTARG}
+			prefix=${prefix%%_*} #Prefix cannot contain underscores
+			echo "prefix after removing underscores: ${prefix}"
+			;;
+		b)
+			haplotagged_bam=${OPTARG} ;;
+		i)
+			haplotagged_bam_index=${OPTARG} ;;
+		s)  
+			supporting_reads=${OPTARG} ;;
+		v)
+			vcf=${OPTARG} ;;
+		r)
+			resource_folder=${OPTARG} ;;
+		o)
+			outputDir=${OPTARG} ;;
+		c)
+			config_file=${OPTARG} ;;
+		l)
+			log_file=${OPTARG} ;;
+		*)
+			echo "Received invalid option"
+			usage
+			;;
+	esac
 done
 log_step() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; [ -n "${log_file:-}" ] && echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >> "$log_file"; }
 trap 'rc=$?; [ $rc -ne 0 ] && [ -n "${log_file:-}" ] && echo "[$(date +%Y-%m-%dT%H:%M:%S)] FAILED: svtopo for ${prefix:-?} (rc=$rc)" >> "$log_file"' EXIT
 
 if [ -z "${prefix:-}" ] || [ -z "${haplotagged_bam:-}" ] || [ -z "${haplotagged_bam_index:-}" ] || [ -z "${supporting_reads:-}" ] || [ -z "${vcf:-}" ] || [ -z "${resource_folder:-}" ]; then
 	usage
+fi
+
+if [[ -z "$config_file" ]]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [[ -z "$config_file" ]]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	usage
+fi
+if [[ ! -f "$config_file" ]]; then
+	echo "Config file not found: $config_file" 1>&2
+	exit 1
 fi
 
 cp "$haplotagged_bam" "$SLURM_TMPDIR"
@@ -96,7 +101,7 @@ cp $resource_folder/cnv.excluded_regions.hg38.bed.gz "$SLURM_TMPDIR"
 cp $image $SLURM_TMPDIR
 #As suggested in https://github.com/PacificBiosciences/SVTopo/blob/main/docs/user_guide.md for annotation
 zgrep -iE "L1|L2|LINE|SVA" $SLURM_TMPDIR/repeatmaskerUCSC.bed.gz \
-    | awk '($3 - $2) >= 2000 { print $1, $2, $3, $4, $6 }' > $SLURM_TMPDIR/retrotransposons.bed
+	| awk '($3 - $2) >= 2000 { print $1, $2, $3, $4, $6 }' > $SLURM_TMPDIR/retrotransposons.bed
 
 #Temporary script to run inside apptainer
 cat << EOF > $SLURM_TMPDIR/svtopo_apptainer_script.sh

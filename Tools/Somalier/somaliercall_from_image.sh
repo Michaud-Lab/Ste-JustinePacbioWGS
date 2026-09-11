@@ -29,33 +29,15 @@ parent_2_name=""
 log_file=""
 while getopts ":p:1:2:i:r:d:s:l:" o; do
     case "${o}" in
-        p)
-            proband_name=${OPTARG}
-            ;;
-        1)
-            parent_1_name=${OPTARG}
-            ;;
-        2)
-            parent_2_name=${OPTARG}
-            ;;
-        i)
-			family_id=${OPTARG}
-			;;
-		r)
-			fasta_path=${OPTARG}
-			;;
-        d)
-            input_directory=${OPTARG}
-            ;;
-        s)
-            sites_vcf=${OPTARG}
-            ;;
-        l)
-            log_file=${OPTARG}
-            ;;
-		*)
-            usage
-            ;;
+        p) proband_name=${OPTARG} ;;
+        1) parent_1_name=${OPTARG} ;;
+        2) parent_2_name=${OPTARG} ;;
+        i) family_id=${OPTARG} ;;
+		r) fasta_path=${OPTARG} ;;
+        d) input_directory=${OPTARG} ;;
+        s) sites_vcf=${OPTARG} ;;
+        l) log_file=${OPTARG} ;;
+		*) usage ;;
     esac
 done
 log_step() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; [ -n "${log_file:-}" ] && echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >> "$log_file"; }
