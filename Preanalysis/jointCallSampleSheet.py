@@ -50,9 +50,13 @@ if __name__ == "__main__":
 	parser.add_argument('-f', '--father', nargs='?',help='father sample name') 
 
 	parser.add_argument('-l', '--list', nargs='?', const='mySampleList.txt', default='mySampleList.txt')
-	parser.add_argument('-c', '--config', nargs='?', const='.myconf.json', default='.myconf.json')
-	
+	parser.add_argument('-c', '--config', nargs='?', const=None, default=None, help='Config file path (default env var WGS_CONFIG_FILE)')
+
 	args		= parser.parse_args()
+	if not args.config:
+		args.config = os.environ.get('WGS_CONFIG_FILE')
+	if not args.config:
+		parser.error("No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set. You can set one with 'export WGS_CONFIG_FILE=<path to config file>'")
 	configs  	= Config.from_path(args.config)
 	sample_sheet_path = configs.Paths.sample_sheet_path
 	family_ids = [args.proband]

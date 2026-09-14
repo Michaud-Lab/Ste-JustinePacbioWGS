@@ -13,10 +13,14 @@ if __name__ == "__main__":
 	parser.add_argument('-l', '--list',help='list of samples to be assigned, separated by newlines',required=True) 
 	parser.add_argument('-f', '--full', nargs='?',help='Up to date csv export of all VCFs on GeneYX',const='Postanalysis/geneYXnamesList.csv', default='Postanalysis/geneYXnamesList.csv')
 	parser.add_argument('-g', '--group',help='The group to which the samples should be assigned to',required=True)
-	parser.add_argument('--config', nargs='?', const='.myconf.json', default='.myconf.json')
+	parser.add_argument('--config', nargs='?', const=None, default=None, help='Config file path (default env var WGS_CONFIG_FILE)')
 	#parser.print_help()
 	args = parser.parse_args()
-	
+	if not args.config:
+		args.config = os.environ.get('WGS_CONFIG_FILE')
+	if not args.config:
+		parser.error("No explicit config file given (--config) and default config var WGS_CONFIG_FILE is not set. You can set one with 'export WGS_CONFIG_FILE=<path to config file>'")
+
 	latest_geneyx_list = pd.read_csv(args.full,names=["ID","Subject"])
 	given_group_list = pd.read_csv(args.list,names=["Subject"])
 

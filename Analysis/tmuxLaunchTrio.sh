@@ -6,8 +6,8 @@
 
 set -euo pipefail
 
-usage() { echo "Usage: $0 [-i <ID>] [-c <Optional_config_file>]" 1>&2; exit 1; }
-config_file=".myconf.json"
+usage() { echo "Usage: $0 [-i <ID>] [-c <Optional_config_file (default env var WGS_CONFIG_FILE)>]" 1>&2; exit 1; }
+config_file=""
  if [ "$#" -eq 0 ]; then
         echo "Error: No arguments supplied."
         usage
@@ -28,12 +28,20 @@ while getopts ":i:c:" o; do
     esac
 done
 
-if [ -z "${id:-}" ] || [ -z "${config_file}" ]; then
+if [ -z "${id:-}" ]; then
     usage
 fi
+
+if [ -z "${config_file}" ]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [ -z "${config_file}" ]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	echo "You can set one with 'export WGS_CONFIG_FILE=<path to config file>'" 1>&2
+	exit 1
+fi
 if [ ! -f "${config_file}" ]; then
-	echo "Config file not found!"
-	usage
+	echo "Config file not found: ${config_file}" 1>&2
 	exit 1
 fi
 

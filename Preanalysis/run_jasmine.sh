@@ -11,11 +11,7 @@ usage() {
     echo "Usage: $0 [-r <run_id> ] [-t <jasmine_version>] [-c <config_file>]" 1>&2
     exit 1
 }
-if [[ -n "$WGS_CONFIG_FILE" ]]; then
-	config_file="$WGS_CONFIG_FILE"
-else
-	echo "No default config file was found. You can set one with 'export WGS_CONFIG_FILE=$SCRATCH/Ste-JustinePacbioWGS/.myconf.json'"
-fi
+config_file=""
 JASMINE_VERSION="2.0.0"
 while getopts "r:t:c:" opt; do
     case "${opt}" in
@@ -27,12 +23,20 @@ while getopts "r:t:c:" opt; do
     esac
 done
 
-if [ -z "$run_id" ]; then 
+if [ -z "$run_id" ]; then
 	usage
 fi
-# default value for config
+
+if [ -z "$config_file" ]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [ -z "$config_file" ]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	echo "You can set one with 'export WGS_CONFIG_FILE=<path to config file>'" 1>&2
+	exit 1
+fi
 if [ ! -f "$config_file" ]; then
-	echo "config file not found: $config_file. You can input one with option '-c', or export a path to 'WGS_CONFIG_FILE' to set a default"
+	echo "Config file not found: $config_file" 1>&2
 	exit 1
 fi
 
