@@ -67,14 +67,16 @@ if [ -z "$JASMINE_TAG" ]; then
   exit 1
 fi
 
-# default value for config
-if [ ! -f "$config_file" ]; then
-	if [ -f "$(dirname "$0")/.myconf.json" ]; then
-		config_file="$(dirname "$0")/.myconf.json"
-	else
-		echo "config file not found: $config_file. You can input one with option '-c'"
-		exit 1
-	fi
+if [[ -z "$config_file" ]]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [[ -z "$config_file" ]]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	usage
+fi
+if [[ ! -f "$config_file" ]]; then
+	echo "Config file not found: $config_file" 1>&2
+	exit 1
 fi
 
 wgs_folder=$(jq -r '.Paths.WGS_folder' "$config_file")

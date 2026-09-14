@@ -37,8 +37,11 @@ if [ ! -f "$config_file" ]; then
 fi
 
 #Folder of the repo
-scripts_folder=$(jq -r '.Paths.WGS_folder' "$config_file")
-
+scripts_folder=$(jq -r '.Paths.WGS_folder' "$config_file")/Preanalysis
+if [ ! -d "$scripts_folder" ]; then
+	echo "Please set 'WGS_folder' setting under 'Paths' in config file."
+	exit 1
+fi
 # run_path in the config points to the folder containing one subfolder per run;
 # the run itself contains one subfolder per well/cell (ie 1_A01, 1_B01...)
 all_runs_folder=$(jq -r '.Paths.run_path' "$config_file")

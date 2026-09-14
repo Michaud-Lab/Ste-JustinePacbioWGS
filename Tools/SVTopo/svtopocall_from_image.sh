@@ -80,6 +80,12 @@ if [[ ! -f "$config_file" ]]; then
 	exit 1
 fi
 
+tools_folder="$(jq -r '.Paths.WGS_folder' "$config_file")/Tools"
+if [ ! -d "$tools_folder" ]; then
+	echo "Please put repo folder in config file under 'Path/WGS_folder. Tools folder not found at: $tools_folder '"
+	exit 1
+fi
+
 cp "$haplotagged_bam" "$SLURM_TMPDIR"
 bam="$(basename $haplotagged_bam)"
 cp "$haplotagged_bam_index" "$SLURM_TMPDIR"
