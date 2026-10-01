@@ -1,6 +1,5 @@
 #!/bin/bash
 #SBATCH --time=4:00:00
-#SBATCH --account=def-rallard
 #SBATCH --output=J-%x.%j.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8

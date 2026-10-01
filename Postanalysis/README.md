@@ -97,8 +97,8 @@ rclone ls staging_juno:/pragmatiq-staging-sd4h/data/[sample_name]
 
 ---
 
-- **globus_cli_send.sh**
-  - *Usage*: `sbatch Postanalysis/globus_cli_send.sh -i <familyID> -d <directory> -m <duo|trio> [-r] [-c config] [-l log_file] [-S send_status_log]`
+- **globus_cli_send.slurm**
+  - *Usage*: `sbatch Postanalysis/globus_cli_send.slurm -i <familyID> -d <directory> -m <duo|trio> [-r] [-c config] [-l log_file] [-S send_status_log]`
   - *Goal*: Pre-flight check followed by a Globus transfer of the processed family directory from the working cluster (Fir) to Narval. The pre-flight check verifies that all required QC outputs exist (Peddy report, SVTopo HTML reports, Triomix PDF [trio only], MultiQC report, concordance reports). Fails fast with a `summary_report.txt` if any are missing.
   - *Arguments*:
     - `-i` Family ID
@@ -121,8 +121,8 @@ rclone ls staging_juno:/pragmatiq-staging-sd4h/data/[sample_name]
 
 ---
 
-- **send_Symlinks_Narval.sh**
-  - *Usage*: `bash Postanalysis/send_Symlinks_Narval.sh -i <familyID> -d <directory> [-r] [-c config]`
+- **send_Symlinks_Narval.slurm**
+  - *Usage*: `bash Postanalysis/send_Symlinks_Narval.slurm -i <familyID> -d <directory> [-r] [-c config]`
   - *Goal*: Transfers the symlinks from the working directory to Narval using rsync (`-l` flag to preserve symlinks). Useful when Globus is unavailable or for re-sending symlinks after an update.
   - *Arguments*: `-i` family ID, `-d` directory, `-r` use robot/automation node (requires `identity_file` in config), `-c` config.
   - *Outputs*: Symlinks replicated under `destination_path/<familyID>/` on Narval.
@@ -224,28 +224,28 @@ rclone ls staging_juno:/pragmatiq-staging-sd4h/data/[sample_name]
 
 The `Tools/` directory contains Apptainer-based wrappers for QC tools. Each is launched as a Slurm job by `postprocessPart1.sh` but can also be run independently. Each tool has a `*call_from_image.sh` launcher and a corresponding `.def` Apptainer definition file. All accept `-l <log_file>` to write SUCCESS/FAILED status to a shared log.
 
-- **Somalier** (`Tools/Somalier/somaliercall_from_image.sh`)
-  - *Usage*: `sbatch Tools/Somalier/somaliercall_from_image.sh -i <familyID> -p <proband> -1 <parent1> [-2 <parent2>] -r <fasta> -d <directory> [-s sites_vcf] [-l log_file]`
+- **Somalier** (`Tools/Somalier/somaliercall_from_image.slurm`)
+  - *Usage*: `sbatch Tools/Somalier/somaliercall_from_image.slurm -i <familyID> -p <proband> -1 <parent1> [-2 <parent2>] -r <fasta> -d <directory> [-s sites_vcf] [-l log_file]`
   - *Goal*: Sample-level relatedness and ancestry inference. Runs `somalier extract` on per-sample VCFs, then `somalier relate` to verify family relationships, and `somalier ancestry` to compare against 1000 Genomes data.
   - *Outputs* (written to `<directory>/Somalier_analyses/`): relatedness HTML report, ancestry HTML report, extracted `.somalier` profiles.
 
-- **Peddy** (`Tools/Peddy/peddycall_from_image.sh`)
-  - *Usage*: `sbatch Tools/Peddy/peddycall_from_image.sh -i <familyID> -p <proband> -1 <parent1> [-2 <parent2>] -d <directory> [-l log_file]`
+- **Peddy** (`Tools/Peddy/peddycall_from_image.slurm`)
+  - *Usage*: `sbatch Tools/Peddy/peddycall_from_image.slurm -i <familyID> -p <proband> -1 <parent1> [-2 <parent2>] -d <directory> [-l log_file]`
   - *Goal*: Sex inference and relatedness checking against population reference data. Cross-validates the declared pedigree structure against genotype data. Merges per-sample normalized VCFs before running.
-  - *Outputs* (written to `<directory>/Peddy_analyses/`): `{familyID}_peddy.html` interactive report, `{familyID}_peddy.ped_check.csv` (used by `globus_cli_send.sh` to detect parent errors).
+  - *Outputs* (written to `<directory>/Peddy_analyses/`): `{familyID}_peddy.html` interactive report, `{familyID}_peddy.ped_check.csv` (used by `globus_cli_send.slurm` to detect parent errors).
 
-- **MultiQC** (`Tools/MultiQc/multiQccall_from_image.sh`)
-  - *Usage*: `sbatch Tools/MultiQc/multiQccall_from_image.sh [-l log_file]` (run from the family output directory)
+- **MultiQC** (`Tools/MultiQc/multiQccall_from_image.slurm`)
+  - *Usage*: `sbatch Tools/MultiQc/multiQccall_from_image.slurm [-l log_file]` (run from the family output directory)
   - *Goal*: Aggregates per-sample QC metrics from pipeline outputs into a single interactive HTML report.
   - *Outputs*: `multiqc_report.html` in the current directory.
 
-- **SVTopo** (`Tools/SVTopo/svtopocall_from_image.sh`)
-  - *Usage*: `sbatch Tools/SVTopo/svtopocall_from_image.sh -p <prefix> -b <haplotagged_bam> -i <bam_index> -s <supporting_reads_json> -v <sv_vcf> -r <resource_folder> -o <output_dir> [-l log_file]`
+- **SVTopo** (`Tools/SVTopo/svtopocall_from_image.slurm`)
+  - *Usage*: `sbatch Tools/SVTopo/svtopocall_from_image.slurm -p <prefix> -b <haplotagged_bam> -i <bam_index> -s <supporting_reads_json> -v <sv_vcf> -r <resource_folder> -o <output_dir> [-l log_file]`
   - *Goal*: Structural variant topology visualization. Produces interactive diagrams of complex SVs from the PacBio SV VCF, using a repeat-masker BED for annotation.
   - *Outputs* (written to `<output_dir>/SVTOPO_OUTPUTS/<prefix>_svtopo/`): `index.html` interactive report and per-SV diagram files.
 
-- **Triomix** (`Tools/Triomix/triomixcall_from_image.sh`)
-  - *Usage*: `sbatch Tools/Triomix/triomixcall_from_image.sh -p <proband_bam> -m <mother_bam> -f <father_bam> -r <fasta> -o <output_dir> [-l log_file]`
+- **Triomix** (`Tools/Triomix/triomixcall_from_image.slurm`)
+  - *Usage*: `sbatch Tools/Triomix/triomixcall_from_image.slurm -p <proband_bam> -m <mother_bam> -f <father_bam> -r <fasta> -o <output_dir> [-l log_file]`
   - *Goal*: Detects sample contamination or mix-up in trio data by testing for unexpected allele sharing between family members. Trios only (not applicable to duos).
   - *Outputs* (written to `<output_dir>/Triomix_analyses/`): `*.child.counts.plot.pdf` — per-chromosome allele-sharing plot.
 

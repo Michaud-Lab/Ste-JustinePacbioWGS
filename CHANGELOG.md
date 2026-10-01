@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
+## 2026-10-01: Fix-sbatch_account
+
+- Removed every "--account" from sbatch headers. So far, each slurm job was hardcoded to use the "def-rallard" sbatch account. It is much more portable to let the user set their own SBATCH_ACCOUNT env variable. Also renamed scripts meant to run in slurm jobs as ".slurm" rather than ".sh".
+
 ## 2026-09-11: Fix-default-config
 
 - Changed most instances of "dirname $0" in scripts and "here_folder" in arguments. The behavior of "dirname $0" is not consistent across clusters or node type (compute node or interactive node). Instead, added a required `WGS_folder` config argument in the `Paths`category. It must path to the directory of this repo. This makes the config file mandatory for most Postanalysis scripts, so I highly suggest setting a default config file path using the WGS_CONFIG_FILE environment variable. 

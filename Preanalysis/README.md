@@ -22,10 +22,10 @@ This will give us a new list of potential families that are ready for analysis.
 This brings us to FIR, where the actual analysis is performed.
 
 The following scripts are used on Fir, typically:
-"globus_cli_get_run.sh" with the family ID, sample ID or runID, which will download the corresponding run data from Rorqual using Globus, then will run automatically "getSample.py" then either "jointCallSampleSheet.py" or "singletonSampleSheet.py". 
+"globus_cli_get_run.slurm" with the family ID, sample ID or runID, which will download the corresponding run data from Rorqual using Globus, then will run automatically "getSample.py" then either "jointCallSampleSheet.py" or "singletonSampleSheet.py". 
 Example:
 ```bash
-sbatch Preanalysis/globus_cli_get_run.sh -s Bioinfo-LR_SampleData.xlsx -f p155
+sbatch Preanalysis/globus_cli_get_run.slurm -s Bioinfo-LR_SampleData.xlsx -f p155
 ```
 The getSamples.py and samplesheet scripts can also be called manually on Fir if the file transfer was done manually. 
 
@@ -105,10 +105,10 @@ The getSamples.py and samplesheet scripts can also be called manually on Fir if 
 
 ---
 
-- **globus_cli_get_run.sh**
+- **globus_cli_get_run.slurm**
   - *Usage*:
     ```bash
-    sbatch Preanalysis/globus_cli_get_run.sh -s <sample_list> [-f <trio_id>] [-r <run_name>] [-n <sample_name>] [-c config]
+    sbatch Preanalysis/globus_cli_get_run.slurm -s <sample_list> [-f <trio_id>] [-r <run_name>] [-n <sample_name>] [-c config]
     ```
   - *Goal*: Downloads one or more runs from the source cluster (Rorqual) to the working cluster (Fir) via Globus, then automatically calls `getSamples.py` and the appropriate samplesheet script (`jointCallSampleSheet.py` for families, `singletonSampleSheet.py` for individuals). Reads cluster endpoints and paths from the `Transfers` section of the config. Exactly one of `-f`, `-r`, or `-n` must be specified.
   - *Arguments*:

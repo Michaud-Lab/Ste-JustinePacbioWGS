@@ -1,6 +1,5 @@
 #!/bin/bash
 #SBATCH --time=8:00:00
-#SBATCH --account=def-rallard
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --output=J-%x.%j.out
@@ -18,7 +17,7 @@
 # $8: Script folder (to have access to the Tools folder even in sbatch)
 
 set -eu
-module load apptainer/1.3.5
+module load apptainer/1.3.5 python/3.11
 projects=$HOME/projects
 
 
@@ -143,4 +142,11 @@ apptainer exec -C -W $SLURM_TMPDIR -B $HOME -B $SLURM_TMPDIR \
 
 mkdir -p "$outputDir/SVTOPO_OUTPUTS/${prefix}_svtopo"
 cp -rv $SLURM_TMPDIR/SVTOPO_OUTPUTS/${prefix}_svtopo $outputDir/SVTOPO_OUTPUTS
+
+#Replace the "Variant IDs" column with gene names overlapping each region
+python3 "$tools_folder/SVTopo/annotate_svtopo_genes.py" \
+  --html "$outputDir/SVTOPO_OUTPUTS/${prefix}_svtopo/index.html" \
+  --gff3 "$SLURM_TMPDIR/ensembl.GRCh38.101.reformatted.gff3.gz" \
+  --js "$outputDir/SVTOPO_OUTPUTS/${prefix}_svtopo/js/app.js"
+
 log_step "SUCCESS: svtopo for ${prefix}"

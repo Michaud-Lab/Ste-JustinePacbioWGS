@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=Globus_${family_id}
 #SBATCH --output=J-%x.%j.out
-#SBATCH --account=def-rallard
 #SBATCH --time=00:10:00
 
 # This script is meant to use globus to send a fully processed folder
