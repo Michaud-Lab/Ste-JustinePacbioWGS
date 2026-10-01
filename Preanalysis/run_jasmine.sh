@@ -11,8 +11,7 @@ usage() {
     echo "Usage: $0 [-r <run_id> ] [-t <jasmine_version>] [-c <config_file>]" 1>&2
     exit 1
 }
-
-config_file="$SCRATCH/Ste-JustinePacbioWGS/.myconf.json"
+config_file=""
 JASMINE_VERSION="2.0.0"
 while getopts "r:t:c:" opt; do
     case "${opt}" in
@@ -24,19 +23,29 @@ while getopts "r:t:c:" opt; do
     esac
 done
 
-if [ -z "$run_id" ]; then 
+if [ -z "$run_id" ]; then
 	usage
 fi
-# default value for config
+
+if [ -z "$config_file" ]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [ -z "$config_file" ]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	echo "You can set one with 'export WGS_CONFIG_FILE=<path to config file>'" 1>&2
+	exit 1
+fi
 if [ ! -f "$config_file" ]; then
-	if [ -f "$(dirname "$0")/.myconf.json" ]; then
-		config_file="$(dirname "$0")/.myconf.json"
-	else
-		echo "config file not found: $config_file. You can input one with option '-c'"
-		exit 1
-	fi
+	echo "Config file not found: $config_file" 1>&2
+	exit 1
 fi
 
+#Folder of the repo
+scripts_folder=$(jq -r '.Paths.WGS_folder' "$config_file")/Preanalysis
+if [ ! -d "$scripts_folder" ]; then
+	echo "Please set 'WGS_folder' setting under 'Paths' in config file."
+	exit 1
+fi
 # run_path in the config points to the folder containing one subfolder per run;
 # the run itself contains one subfolder per well/cell (ie 1_A01, 1_B01...)
 all_runs_folder=$(jq -r '.Paths.run_path' "$config_file")
@@ -46,7 +55,7 @@ if [ ! -d "$run_folder" ]; then
 	exit 1
 fi
 # Tracks which cell folder maps to which submitted Slurm job ID, for later follow-up
-overall_job_log="$(dirname $0)/jasmine_run_$run_id.log"
+overall_job_log="$scripts_folder/jasmine_run_$run_id.log"
  >"$overall_job_log"
 for cell_folder in "$run_folder"/*/; do
 	echo "Cell folder: $cell_folder"
@@ -77,8 +86,8 @@ for cell_folder in "$run_folder"/*/; do
 	fi
 	xml_file="${xml_matches[0]}"
 	echo "$xml_file"
-	echo "sbatch -D $cell_folder/pb_formats $(dirname $0)/jasmine.slurm -x $xml_file -t $JASMINE_VERSION -c $config_file"
-	job_id=$(sbatch --parsable -D "$cell_folder/pb_formats" "$(dirname $0)/jasmine.slurm" -x "$xml_file" -t "$JASMINE_VERSION" -c "$config_file")
+	echo "sbatch -D $cell_folder/pb_formats $scripts_folder/jasmine.slurm -x $xml_file -t $JASMINE_VERSION -c $config_file"
+	job_id=$(sbatch --parsable -D "$cell_folder/pb_formats" "$scripts_folder/jasmine.slurm" -x "$xml_file" -t "$JASMINE_VERSION" -c "$config_file")
 	echo "Submitted job $job_id"
 	echo "$cell_folder job id: $job_id" >>"$overall_job_log"
 done

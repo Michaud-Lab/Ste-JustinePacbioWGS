@@ -17,6 +17,7 @@
 		},
 	"Paths":
 		{
+			"WGS_folder": "/home/felixant/links/scratch/Ste-JustinePacbioWGS",
 			"run_path": "/home/felixant/projects/ctb-rallard/COMMUN/PacBioData/",
 			"ref_maps": "/home/felixant/scratch/HiFi-human-WGS-WDL/GRCh38.ref_map.v2p0p0.tsv",
 			"sample_sheet_path": "/home/felixant/scratch/SampleSheet/",

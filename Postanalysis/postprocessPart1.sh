@@ -22,7 +22,7 @@ module load python/3.11 htslib/1.22.1 bcftools/1.22 bedtools/2.31.0 apptainer/1.
 usage() { 
 	printf "Usage: \n $0 [-i <familyID>]  [-g <group (i.e. prag,decode,valid,c4r /p,d,v,c)>] \n
  [-s {to run every step, otherwise will enter interactive mode}] \n
- [-c <Optional_config_file>] \n" 
+ [-c <Optional_config_file, default env var WGS_CONFIG_FILE>] \n" 
  1>&2; exit 1; }
 
 run_all=false
@@ -71,21 +71,25 @@ while getopts "i:c:g:s" o; do
 	esac
 done
 
+if [[ -z "$config_file" ]]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [[ -z "$config_file" ]]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	usage
+fi
+if [[ ! -f "$config_file" ]]; then
+	echo "Config file not found: $config_file" 1>&2
+	exit 1
+fi
 
-here_folder=$(realpath "$(dirname $0)") #Postanalysis folder
-tools_folder="$here_folder/../Tools"
+script_dir="$(jq -r '.Paths.WGS_folder' "$config_file")/Postanalysis"
+tools_folder="$script_dir/../Tools"
 if [ -z "$1" ]; then
 	usage
 fi
 
 if [ -z "${id}" ] || [ -z "${group}" ]; then
-	usage
-fi
-if [ -z "${config_file:-}" ]; then
-	echo "No config file provided, using default location $here_folder/../.myconf.json"
-	config_file="$here_folder/../.myconf.json"
-elif [ ! -f "${config_file}" ]; then
-	echo "Config file not found!"
 	usage
 fi
 
@@ -145,10 +149,10 @@ function UnifyVCF() {
 	local unify_output="$directory/$1-unifiedTrioVCFv2.vcf.gz"
 	echo "Unifying VCFs for $1" >> "$report_file"
 if [ ! -f "$unify_output" ]; then
-	python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/UnifyVcf/PacBioUnifyVcf.py \
+	python3 "$script_dir"/geneyx.analysis.api_CHUSJ/scripts/UnifyVcf/PacBioUnifyVcf.py \
 		-o "$directory/$1-unifiedTrioVCFv2.vcf" \
 		-s "$3" -r "$2" -c $3 \
-		-b $here_folder/geneyx.analysis.api_CHUSJ/scripts/UnifyVcf/STRchive-disease-loci.hg38.TRGT.bed >> "$report_file" 2>&1
+		-b $script_dir/geneyx.analysis.api_CHUSJ/scripts/UnifyVcf/STRchive-disease-loci.hg38.TRGT.bed >> "$report_file" 2>&1
 fi
 if [ -f "$unify_output" ]; then
 	echo "Unify ok for $1" >> "$report_file"
@@ -176,14 +180,14 @@ EOF
 }
 #Put the extracted API-ID and pass in the geneyx Config
 function geneYXConfig() {
-	if [ ! -f $here_folder/../.myGeneYXConf.yml ]; then
+	if [ ! -f $script_dir/../.myGeneYXConf.yml ]; then
 		api_ID=$(python3 -c "import json; print(json.load(open('${config_file}'))['GeneYX']['apiUserId'])")
 		api_key=$(python3 -c "import json; print(json.load(open('${config_file}'))['GeneYX']['apiUserKey'])")
-		sed -e "s,enter-your-userid,$api_ID,g" $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga.config.yml >$here_folder/../.myGeneYXConf.yml
-		sed -ie "s,enter-your-userkey,$api_key,g" $here_folder/../.myGeneYXConf.yml
+		sed -e "s,enter-your-userid,$api_ID,g" $script_dir/geneyx.analysis.api_CHUSJ/scripts/ga.config.yml >$script_dir/../.myGeneYXConf.yml
+		sed -ie "s,enter-your-userkey,$api_key,g" $script_dir/../.myGeneYXConf.yml
 
 	fi
-	ls "$here_folder/../.myGeneYXConf.yml"
+	ls "$script_dir/../.myGeneYXConf.yml"
 }
 
 #Give the dependency list and the function will print a line to be used in sbatch
@@ -208,7 +212,7 @@ function log_step() {
 # Returns 1 (and logs why) if concordance should be skipped for this sample.
 function fetch_concordance() {
 	local sample_name="$1"
-	if bash "$here_folder/fetch_concordance_gvcf.sh" -n "$sample_name" -o "$directory" -c "$config_file" -l "$log_file"; then
+	if bash "$script_dir/fetch_concordance_gvcf.sh" -n "$sample_name" -o "$directory" -c "$config_file" -l "$log_file"; then
 		return 0
 	else
 		local rc=$?
@@ -244,7 +248,7 @@ function apptainerGet() {
 		export APPTAINER_CACHEDIR="/home/felixant/scratch/singularity_cache"
 	"""
 		echo "Using script folder for now"
-		export APPTAINER_CACHEDIR="$here_folder/apptainer_cache"
+		export APPTAINER_CACHEDIR="$script_dir/apptainer_cache"
 		mkdir -p $APPTAINER_CACHEDIR
 	fi
 	if [ ! -f "$APPTAINER_CACHEDIR/$1" ]; then
@@ -325,7 +329,7 @@ ls "$SCRATCH/QCData/${family_id}_${1}_QC_new.json"
 function getPed(){
 	if [ ! -f "$directory/${family_id}.ped" ]; then
 		echo "Generating .ped Pedigree with Postanalysis/getPed.py"
-		python3 "$here_folder/getPed.py" "$family_id" "$samplesheet"
+		python3 "$script_dir/getPed.py" "$family_id" "$samplesheet"
 		if [ ! -f "$directory/$family_id.ped" ]; then
 			cp "${family_id}.ped" "$directory/" 
 		fi
@@ -551,7 +555,7 @@ if [ -f "$seff_report_file" ]; then
 	echo "Resource efficiency report already exists at $seff_report_file, skipping" >> "$report_file"
 elif [ "$run_seff_report" == true ] || [ "$run_all" == true ]; then
 	echo "Generating seff resource-efficiency report for $family_id" >> "$report_file"
-	if python3 "$here_folder/../Analysis/seff_report.py" "$directory" >> "$report_file" 2>&1; then
+	if python3 "$script_dir/../Analysis/seff_report.py" "$directory" >> "$report_file" 2>&1; then
 		log_step "DONE: seff resource-efficiency report for $family_id"
 	else
 		rc=$?; log_step "FAILED: seff resource-efficiency report for $family_id (rc=$rc)"; exit $rc
@@ -576,7 +580,7 @@ if [ "$send_to_geneyx" == true ] || [ "$run_all" == true ]; then
 	echo JSON file for GeneYX upload built: $directory/modifiedGeneYXTrio$family_id.json >> "$report_file"
 	cat $directory/modifiedGeneYXTrio$family_id.json >> "$report_file"
 	cd $directory
-	if python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/JSON_Sample_Upload.py \
+	if python3 $script_dir/geneyx.analysis.api_CHUSJ/scripts/JSON_Sample_Upload.py \
 		--jsonFile $directory/modifiedGeneYXTrio$family_id.json \
 		-c $my_config >> "$report_file" 2>&1; then
 		log_step "DONE: GeneYX sample upload for $family_id"
@@ -624,7 +628,7 @@ EOF
 	echo "Case upload JSON file built: $directory/modifiedTrioCaseUpload$family_id.json" >> "$report_file"
 	cat $directory/modifiedTrioCaseUpload$family_id.json >> "$report_file"
 	cd  $directory
-	if python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_CreateCase.py \
+	if python3 $script_dir/geneyx.analysis.api_CHUSJ/scripts/ga_CreateCase.py \
 		--data $directory/modifiedTrioCaseUpload$family_id.json \
 		-c $my_config >> "$report_file" 2>&1; then
 		log_step "DONE: GeneYX case upload for $family_id"
@@ -646,12 +650,12 @@ if [ "$send_qc_to_geneyx" == true ] || [ "$run_all" == true ]; then
 	echo "Retrieving QC data for $first_parent_role..." >> "$report_file"
 	first_parentQCData=$(buildQCData "$first_parent_name" "1" "$(basename $first_parent_normalized_SNV)")
 	cat "$first_parentQCData" >> "$report_file"
-	if python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$probandQCData" -c $my_config >> "$report_file" 2>&1; then
+	if python3 $script_dir/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$probandQCData" -c $my_config >> "$report_file" 2>&1; then
 		log_step "DONE: GeneYX QC upload for $proband_name"
 	else
 		rc=$?; log_step "FAILED: GeneYX QC upload for $proband_name (rc=$rc)"; exit $rc
 	fi
-	if python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$first_parentQCData" -c $my_config >> "$report_file" 2>&1; then
+	if python3 $script_dir/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$first_parentQCData" -c $my_config >> "$report_file" 2>&1; then
 		log_step "DONE: GeneYX QC upload for $first_parent_name"
 	else
 		rc=$?; log_step "FAILED: GeneYX QC upload for $first_parent_name (rc=$rc)"; exit $rc
@@ -662,7 +666,7 @@ if [ "$send_qc_to_geneyx" == true ] || [ "$run_all" == true ]; then
 		echo "Retrieving QC data for second_parent..." >> "$report_file"
 		second_parentQCData=$(buildQCData "$second_parent_name" "2" "$(basename $second_parent_normalized_SNV)")
 		cat "$second_parentQCData" >> "$report_file"
-		if python3 $here_folder/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$second_parentQCData" -c $my_config >> "$report_file" 2>&1; then
+		if python3 $script_dir/geneyx.analysis.api_CHUSJ/scripts/ga_addQcData.py -d "$second_parentQCData" -c $my_config >> "$report_file" 2>&1; then
 			log_step "DONE: GeneYX QC upload for $second_parent_name"
 		else
 			rc=$?; log_step "FAILED: GeneYX QC upload for $second_parent_name (rc=$rc)"; exit $rc
@@ -685,13 +689,13 @@ if [ "$include_svtopo" == true ] || [ "$run_all" == true ]; then
 	dependency_Proband="$(sbatch --parsable -J svtopo_${family_id}_proband \
 		-D $directory/SVTOPO_OUTPUTS $tools_folder/SVTopo/svtopocall_from_image.sh \
 		-p "$family_id-proband-${proband_name}" -b "$proband_bam" -i "$proband_bam_bai" \
-		-s "$supporting_reads" -v "$proband_SV" -r "$resource_folder" -o $directory -t $tools_folder -l "$log_file")"
+		-s "$supporting_reads" -v "$proband_SV" -r "$resource_folder" -o $directory -l "$log_file")"
 	echo "Find SVTopo report for proband: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_proband.$dependency_Proband.out" >> "$report_file"
 	log_step "SUBMITTED: svtopo_${family_id}_proband (job_id=$dependency_Proband)"
 	dependency_first_parent="$(sbatch --parsable -J svtopo_${family_id}_$first_parent_role \
 		-D $directory/SVTOPO_OUTPUTS $tools_folder/SVTopo/svtopocall_from_image.sh \
 		-p "$family_id-$first_parent_role-${first_parent_name}" -b "$first_parent_bam" -i "$first_parent_bam_bai" \
-		-s "$supporting_reads" -v "$first_parent_SV" -r "$resource_folder" -o $directory -t $tools_folder -l "$log_file")"
+		-s "$supporting_reads" -v "$first_parent_SV" -r "$resource_folder" -o $directory -l "$log_file")"
 	echo "Find SVTopo report for $first_parent_role: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_$first_parent_role.$dependency_first_parent.out" >> "$report_file"
 	log_step "SUBMITTED: svtopo_${family_id}_${first_parent_role} (job_id=$dependency_first_parent)"
 	dependencies+=("$dependency_Proband" "$dependency_first_parent")
@@ -699,7 +703,7 @@ if [ "$include_svtopo" == true ] || [ "$run_all" == true ]; then
 		dependency_second_parent="$(sbatch --parsable -J svtopo_${family_id}_$second_parent_role \
 			-D $directory/SVTOPO_OUTPUTS $tools_folder/SVTopo/svtopocall_from_image.sh \
 			-p "$family_id-$second_parent_role-${second_parent_name}" -b "$second_parent_bam" -i "$second_parent_bam_bai" \
-			-s "$supporting_reads" -v "$second_parent_SV" -r "$resource_folder" -o $directory -t $tools_folder -l "$log_file")"
+			-s "$supporting_reads" -v "$second_parent_SV" -r "$resource_folder" -o $directory -l "$log_file")"
 		echo "Find SVTopo report for $second_parent_role: $directory/SVTOPO_OUTPUTS/J-svtopo_${family_id}_$second_parent_role.$dependency_second_parent.out" >> "$report_file"
 		log_step "SUBMITTED: svtopo_${family_id}_${second_parent_role} (job_id=$dependency_second_parent)"
 		dependencies+=("$dependency_second_parent")
@@ -747,7 +751,7 @@ if  [ "$run_all" == true ] || [ "$include_somalier" == true ]; then
 	echo "Find Somalier report at $directory/Somalier_analyses/J-somalier_${family_id}.$dependency_Somalier.out" >> "$report_file"
 	log_step "SUBMITTED: somalier_${family_id} (job_id=$dependency_Somalier)"
 	dependencies+=($dependency_Somalier)
-	cd "$here_folder"
+	cd "$script_dir"
 fi
 
 #Peddy step
@@ -760,7 +764,7 @@ if [ "$include_peddy" == true ] || [ "$run_all" == true ]; then
 
 	dependency_Peddy="$(sbatch --parsable -J peddy_${family_id} \
 		-D $directory/Peddy_analyses $tools_folder/Peddy/peddycall_from_image.sh \
-		-p "$proband_name" -1 "$first_parent_name" -2 "$second_parent_name" -i $family_id -d "$directory" -l "$log_file")"
+		-p "$proband_name" -1 "$first_parent_name" -2 "$second_parent_name" -i $family_id -d "$directory" -c "$config_file" -l "$log_file")"
 	echo "Find Peddy report at $directory/Peddy_analyses/J-peddy_${family_id}.$dependency_Peddy.out" >> "$report_file"
 	log_step "SUBMITTED: peddy_${family_id} (job_id=$dependency_Peddy)"
 	dependencies+=($dependency_Peddy)
@@ -791,8 +795,8 @@ if [[ $group_code != "decode" && ("$include_concordance" == true || "$run_all" =
 
 	if fetch_concordance "$proband_name"; then
 		dependency_concordance_proband="$(sbatch --parsable -J "sr-lr_${family_id}_proband_${proband_name}" \
-			-D "$directory/Concordance" "$here_folder/run_concordance.slurm" \
-			-n "$proband_name" -v "$proband_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file")"
+			-D "$directory/Concordance" "$script_dir/run_concordance.slurm" \
+			-n "$proband_name" -v "$proband_normalized_SNV" -o "$directory" -l "$log_file")"
 		echo "Concordance report for proband: $directory/Concordance/concordance_report_${proband_name}.txt" >> "$report_file"
 		log_step "SUBMITTED: concordance_${family_id}_proband (job_id=$dependency_concordance_proband)"
 		final_dependencies+=("$dependency_concordance_proband")
@@ -800,8 +804,8 @@ if [[ $group_code != "decode" && ("$include_concordance" == true || "$run_all" =
 
 	if fetch_concordance "$first_parent_name"; then
 		dependency_concordance_first="$(sbatch --parsable -J "sr-lr_${family_id}_${first_parent_role}_${first_parent_name}" \
-			-D "$directory/Concordance" "$here_folder/run_concordance.slurm" \
-			-n "$first_parent_name" -v "$first_parent_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file")"
+			-D "$directory/Concordance" "$script_dir/run_concordance.slurm" \
+			-n "$first_parent_name" -v "$first_parent_normalized_SNV" -o "$directory" -l "$log_file")"
 		echo "Concordance report for ${first_parent_role}: $directory/Concordance/concordance_report_${first_parent_name}.txt" >> "$report_file"
 		log_step "SUBMITTED: concordance_${family_id}_${first_parent_role} (job_id=$dependency_concordance_first)"
 		final_dependencies+=("$dependency_concordance_first")
@@ -810,8 +814,8 @@ if [[ $group_code != "decode" && ("$include_concordance" == true || "$run_all" =
 	if [ "$mode" == "trio" ]; then
 		if fetch_concordance "$second_parent_name"; then
 			dependency_concordance_second="$(sbatch --parsable -J "sr-lr_${family_id}_${second_parent_role}_${second_parent_name}" \
-				-D "$directory/Concordance" "$here_folder/run_concordance.slurm" \
-				-n "$second_parent_name" -v "$second_parent_normalized_SNV" -o "$directory" -t "$tools_folder" -l "$log_file")"
+				-D "$directory/Concordance" "$script_dir/run_concordance.slurm" \
+				-n "$second_parent_name" -v "$second_parent_normalized_SNV" -o "$directory" -l "$log_file")"
 			echo "Concordance report for ${second_parent_role}: $directory/Concordance/concordance_report_${second_parent_name}.txt" >> "$report_file"
 			log_step "SUBMITTED: concordance_${family_id}_${second_parent_role} (job_id=$dependency_concordance_second)"
 			final_dependencies+=("$dependency_concordance_second")
@@ -831,14 +835,14 @@ if [ "$include_cleanup" == true ] || [ "$run_all" == true ]; then
 	if step_done "cleanup"; then
 		echo "Skipping cleanup.sh (already completed successfully)"
 	else
-		bash $here_folder/cleanup.sh -i $family_id -d $directory -c $config_file
+		bash $script_dir/cleanup.sh -i $family_id -d $directory -c $config_file
 		record_status "cleanup" "DONE"
 	fi
 
 	if step_done "outputs_json"; then
 		echo "Skipping outputs_Json.sh (already completed successfully)"
 	else
-		bash $here_folder/outputs_Json.sh -i $family_id -d $directory -c $config_file
+		bash $script_dir/outputs_Json.sh -i $family_id -d $directory -c $config_file
 		record_status "outputs_json" "DONE"
 	fi
 
@@ -868,7 +872,7 @@ if [ "$include_cleanup" == true ] || [ "$run_all" == true ]; then
 		fi
 		record_status "rsync_symlinks" "DONE"
 	fi
-	#bash $here_folder/send_Symlinks_Narval.sh -i $family_id -d $directory -c $config_file -r
+	#bash $script_dir/send_Symlinks_Narval.sh -i $family_id -d $directory -c $config_file -r
 
 	# This login part is only necessary the first time, but it needs to be done interactively
 	# I.e.: not in a sbatch job
@@ -883,10 +887,10 @@ if [ "$include_cleanup" == true ] || [ "$run_all" == true ]; then
 	globus login --gcs ${destination_endpoint}:${destination_collection} --gcs ${source_endpoint}:${source_collection}
 
 	#If ready to send, we can append to the final list (used for updating BAMs to the correct sample)
-	echo "$proband_name,$family_id/proband/${proband_name}" >>"$here_folder/geneYXNameList.txt"
-	echo "$first_parent_name,$family_id/${first_parent_role,,}/${first_parent_name}" >>"$here_folder/geneYXNameList.txt"
+	echo "$proband_name,$family_id/proband/${proband_name}" >>"$script_dir/geneYXNameList.txt"
+	echo "$first_parent_name,$family_id/${first_parent_role,,}/${first_parent_name}" >>"$script_dir/geneYXNameList.txt"
 	if [ "$mode" == "trio" ]; then
-		echo "$second_parent_name,$family_id/${second_parent_role,,}/${second_parent_name}" >>"$here_folder/geneYXNameList.txt"
+		echo "$second_parent_name,$family_id/${second_parent_role,,}/${second_parent_name}" >>"$script_dir/geneYXNameList.txt"
 	fi
 
 	if step_done "globus_send"; then
@@ -896,8 +900,8 @@ if [ "$include_cleanup" == true ] || [ "$run_all" == true ]; then
 		final_dependency_line=$(dependencyLine "${final_dependencies[@]}")
 		echo "dependency line for Cleanup: $final_dependency_line"
 		globus_job_id=$(sbatch --parsable $final_dependency_line -D $directory -J final_globus_${family_id} \
-			"$here_folder/globus_cli_send.sh" -i "$family_id" -d "$directory" -c "$config_file" \
-			-t "$tools_folder" -m $mode "$globus_r_arg" -l "$log_file" -S "$send_log")
+			"$script_dir/globus_cli_send.sh" -i "$family_id" -d "$directory" -c "$config_file" \
+			-m $mode "$globus_r_arg" -l "$log_file" -S "$send_log")
 		log_step "SUBMITTED: final_globus_${family_id} (job_id=$globus_job_id)"
 		record_status "globus_send" "SUBMITTED:$globus_job_id"
 	fi

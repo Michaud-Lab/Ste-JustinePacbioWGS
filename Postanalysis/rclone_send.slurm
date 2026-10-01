@@ -2,7 +2,7 @@
 #SBATCH --job-name=rclone_send
 #SBATCH --output=J-%x.%j.out
 #SBATCH --account=def-rallard
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=20G
 
@@ -41,7 +41,7 @@ if [ -z "${source_dir:-}" ] || [ -z "${destination:-}" ]; then
 fi
 
 echo "Copying $source_dir → $destination"
-rclone copy -L \
+rclone copy -Lv \
     --transfers 2 \
     --s3-chunk-size 512M \
     --s3-upload-concurrency 8 \

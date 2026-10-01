@@ -13,12 +13,11 @@ echo "Arguments:"
 for var in "$@"; do
  echo $var
 done
-usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>] [-t <tools_folder>] [-m <mode> (duo/trio)] " 1>&2; exit 1; }
-config_file="$(dirname $0)/../.myconf.json"
-tools_folder="$(dirname $0)/../Tools/"
+usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default env var WGS_CONFIG_FILE)>] [-m <mode> (duo/trio)] " 1>&2; exit 1; }
+config_file=""
 log_file=""
 send_status_log=""
-while getopts ":i:d:c:t:m:l:r:S:" o; do
+while getopts ":i:d:c:m:l:r:S:" o; do
 	case "${o}" in
 		i)	family_id=${OPTARG}	;;
 		d)
@@ -28,8 +27,6 @@ while getopts ":i:d:c:t:m:l:r:S:" o; do
 				exit
 			fi
 			;;
-		#This should be in the repo, directory containing the globus environment and requirements
-		t)	tools_folder=${OPTARG}	;;
 		c)	config_file=${OPTARG}	;;
 		m)
 			mode=${OPTARG}
@@ -50,10 +47,19 @@ if [ -z "${family_id:-}" ] || [ -z "${directory:-}" ]; then
 	usage
 fi
 
+if [[ -z "$config_file" ]]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [[ -z "$config_file" ]]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	usage
+fi
 if [ ! -f "$config_file" ]; then
 	echo "Could not find config file $config_file"
-	exit
+	exit 1
 fi
+
+tools_folder="$(jq -r '.Paths.WGS_folder' "$config_file")/Tools"
 
 # On Narval the default destination the path is:
 destination_path="$(jq -r '.Transfers.destination_path' $config_file)"
@@ -151,6 +157,8 @@ else
 	echo "Loading environment"
 	pip install -r "$tools_folder/requirements.txt"
 fi
+echo "Globus command:"
+echo "globus transfer --label $family_id-transfer -r ${source_collection}:$directory ${destination_collection}:${destination_path}/$family_id"
 globus transfer --label $family_id-transfer -r "${source_collection}:$directory" "${destination_collection}:${destination_path}/$family_id"
 log_step "SUCCESS: globus transfer for ${family_id}"
 if [ -n "${send_status_log:-}" ]; then

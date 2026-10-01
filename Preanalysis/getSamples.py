@@ -21,9 +21,13 @@ if __name__ == "__main__":
 		description='given a run_id, retrieve the samples included within. Prints them to run_ID_sample for future use')
 	parser.add_argument('-r', '--run',help='Run id from Revio, should link to a directory with the same name contained in config args.Path.run_path',required=True) 
 	parser.add_argument('-l', '--list', nargs='?', const='mySampleList.txt', default='mySampleList.txt')
-	parser.add_argument('-c', '--config', nargs='?', const='.myconf.json', default='.myconf.json')
-	
+	parser.add_argument('-c', '--config', nargs='?', const=None, default=None, help='Config file path (default env var WGS_CONFIG_FILE)')
+
 	args		= parser.parse_args()
+	if not args.config:
+		args.config = os.environ.get('WGS_CONFIG_FILE')
+	if not args.config:
+		parser.error("No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set. You can set one with 'export WGS_CONFIG_FILE=<path to config file>'")
 	configs  	= Config.from_path(args.config)
 
 	run_path	= configs.Paths.run_path
@@ -43,10 +47,12 @@ if __name__ == "__main__":
 		if len(hifi_bam_matches) > 1:
 			sys.exit(f"Error: expected exactly one *bc*.bam file in {well_folder}/hifi_reads, found {len(hifi_bam_matches)}: {[m.name for m in hifi_bam_matches]}")
 		hifi_prefix = hifi_bam_matches[0].stem
+		print(f"Hifi_prefix:{hifi_prefix}")
 		#The sample name is contained in this metadata file, in the pb_format folder		
-		grep_command = f"grep -o \"BioSample Name=\".*\"\" {well_folder}/pb_formats/{hifi_prefix}.consensusreadset.xml | cut -f2 -d'\"' | tr -d '\n'"
+		grep_command = f"grep -o \"BioSample Name=\".*\"\" {well_folder}/pb_formats/{hifi_prefix}*.consensusreadset.xml | cut -f2 -d'\"' | tr -d '\n'"
 		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
 		given_name = grep_result.stdout
+		print(f"Given name:{given_name}")
 		#Special case for Decodeur and Care for rare (C4R) samples
 		if given_name[0:3] == "HSJ" or given_name[0:3] == "C4R":
 			family_name = given_name[:-3]
@@ -121,7 +127,7 @@ if __name__ == "__main__":
 						print(sample)
 						print("vs")
 						print(existing_sample_object)
-						print("Writting it to list anyways")
+						print("Writing it to list anyways")
 		if not skip_append:
 			with open(args.list, "a") as fw:
 				fw.write(f"{sample.__str__()};{sample.bam_path};{sample.case_status['Affected']}\n")

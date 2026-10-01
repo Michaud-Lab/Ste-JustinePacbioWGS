@@ -18,34 +18,31 @@ for var in "$@"; do
 done
 
 usage() {
-    echo "Usage: $0 -s <sample_list> [-f <trio_id>] [-r <run_name>] [-n <sample_name>] [-c <config_file>] [-t <tools_folder>]"
+    echo "Usage: $0 -s <sample_list> [-f <trio_id>] [-r <run_name>] [-n <sample_name>] [-c <config_file>]"
     echo ""
     echo "  -s  Path to sample list file [required] (.tsv, .csv, or .xlsx — first sheet only)"
     echo "  -f  Trio/family ID to transfer (matches 'Trio' column, e.g. p131)"
     echo "  -r  Run name to transfer (matches 'Run' column)"
     echo "  -n  Single sample name to transfer (matches 'PatientID' column)"
-    echo "  -c  Config file path (default: ../.myconf.json relative to script)"
-    echo "  -t  Tools folder path (default: ../Tools/ relative to script)"
+    echo "  -c  Config file path (default env var WGS_CONFIG_FILE)"
     1>&2
     exit 1
 }
 
 # Defaults
-config_file=".myconf.json"
-tools_folder="Tools"
+config_file=""
 sample_list=""
 family_id=""
 run_id=""
 name_id=""
 
-while getopts "s:f:r:n:c:t:h" o; do
+while getopts "s:f:r:n:c:h" o; do
     case "${o}" in
         s)  sample_list=${OPTARG} ;;
         f)  family_id=${OPTARG};  echo "Will attempt to retrieve full family/trio: $family_id" ;;
         r)  run_id=${OPTARG};     echo "Will attempt to retrieve full run: $run_id" ;;
         n)  name_id=${OPTARG};    echo "Will attempt to retrieve single sample: $name_id" ;;
         c)  config_file=${OPTARG} ;;
-        t)  tools_folder=${OPTARG} ;;
         h)  usage ;;
         :)  echo "Error: ${OPTARG} requires an argument."; exit 1 ;;
         *)  usage ;;
@@ -64,10 +61,21 @@ if [ ! -f "$sample_list" ]; then
     exit 1
 fi
 
+if [ -z "$config_file" ]; then
+    config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [ -z "$config_file" ]; then
+    echo "Error: No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set."
+    echo "You can set one with 'export WGS_CONFIG_FILE=<path to config file>'"
+    exit 1
+fi
 if [ ! -f "$config_file" ]; then
     echo "Error: Config file not found: $config_file"
     exit 1
 fi
+
+wgs_folder="$(jq -r '.Paths.WGS_folder' "$config_file")"
+tools_folder="$wgs_folder/Tools"
 
 n_modes=0
 [ -n "$family_id" ] && n_modes=$((n_modes + 1))
@@ -247,7 +255,7 @@ echo "All transfers complete."
 # --- PHASE 2: Pre-analysis ---
 echo ""
 echo "=== PHASE 2: Pre-analysis ==="
-SCRIPT_DIR="Preanalysis/"
+SCRIPT_DIR="$wgs_folder/Preanalysis"
 
 # Step 1: getSamples.py — once per unique Run
 echo "--- Step 1: getSamples.py per unique Run ---"

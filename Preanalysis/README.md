@@ -108,7 +108,7 @@ The getSamples.py and samplesheet scripts can also be called manually on Fir if 
 - **globus_cli_get_run.sh**
   - *Usage*:
     ```bash
-    sbatch Preanalysis/globus_cli_get_run.sh -s <sample_list> [-f <trio_id>] [-r <run_name>] [-n <sample_name>] [-c config] [-t tools_folder]
+    sbatch Preanalysis/globus_cli_get_run.sh -s <sample_list> [-f <trio_id>] [-r <run_name>] [-n <sample_name>] [-c config]
     ```
   - *Goal*: Downloads one or more runs from the source cluster (Rorqual) to the working cluster (Fir) via Globus, then automatically calls `getSamples.py` and the appropriate samplesheet script (`jointCallSampleSheet.py` for families, `singletonSampleSheet.py` for individuals). Reads cluster endpoints and paths from the `Transfers` section of the config. Exactly one of `-f`, `-r`, or `-n` must be specified.
   - *Arguments*:
@@ -116,8 +116,7 @@ The getSamples.py and samplesheet scripts can also be called manually on Fir if 
     - `-f` — Trio/family ID to transfer (matches the `Trio` column)
     - `-r` — Run name to transfer (matches the `Run` column)
     - `-n` — Single sample name to transfer (matches the `PatientID` column)
-    - `-c` — Config file (default: `../.myconf.json` relative to the script)
-    - `-t` — Tools folder (default: `../Tools/` relative to the script)
+    - `-c` — Config file (default: `WGS_CONFIG_FILE` env variable )
   - *Outputs*: Downloaded run files on the working cluster; updated sample list; generated samplesheet(s) written to `sample_sheet_path`.
 
 ---

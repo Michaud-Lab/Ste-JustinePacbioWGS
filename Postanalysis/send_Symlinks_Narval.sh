@@ -22,15 +22,14 @@ echo "send_Symlinks_Narval Arguments:"
 for var in "$@"; do
  echo $var
 done
-usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default .myconf.json)>]" 1>&2; exit 1; }
-config_file="$(dirname $0)/../.myconf.json"
+usage() { echo "Usage: $0 [-i <familyID>] [-d <directory to clean>] [-c <optional config file (default env var WGS_CONFIG_FILE)>]" 1>&2; exit 1; }
+config_file=""
 cluster="narval.alliancecan.ca"
-identity_line=""
+use_robot="False"
 while getopts ":i:d:c:r" o; do
 	case "${o}" in
 		i)
-			family_id=${OPTARG}
-			;;
+			family_id=${OPTARG} ;;
 		d)
 			directory=${OPTARG}
 			if [ ! -d "$directory" ]; then
@@ -39,21 +38,11 @@ while getopts ":i:d:c:r" o; do
 			fi
 			;;
 		c)
-			config_file=${OPTARG}
-			;;
+			config_file=${OPTARG} ;;
 		r)
-			#Use robot node (automation but requires setup)
-			cluster="robot.narval.alliancecan.ca"
-			identity_file=$(jq -r '.Transfers.identity_file' "$config_file")
-			if [ ! -f "$identity_file" ]; then
-				echo "Could not find identity file $identity_file"
-				exit
-			fi
-			identity_line="-e \"ssh -i $identity_file\""
-			;;
+			use_robot="True" ;;
 		*)
-			usage
-			;;
+			usage ;;
 	esac
 done
 
@@ -61,9 +50,31 @@ if [ -z "${family_id:-}" ] || [ -z "${directory:-}" ]; then
 	usage
 fi
 
-if [ ! -f "$config_file" ]; then
-	echo "Could not find config file $config_file"
-	exit
+if [[ -z "$config_file" ]]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [[ -z "$config_file" ]]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	usage
+fi
+if [[ ! -f "$config_file" ]]; then
+	echo "Config file not found: $config_file" 1>&2
+	exit 1
+fi
+
+if [[ $use_robot == "True" ]];then
+	echo "Send symlink step tries to send with automation"
+	#Use robot node (automation but requires setup)
+	cluster="robot.narval.alliancecan.ca"
+	identity_file=$(jq -r '.Transfers.identity_file' "$config_file")
+	if [ ! -f "$identity_file" ]; then
+		echo "Could not find identity file $identity_file"
+		exit
+	fi
+	identity_line="-e \"ssh -i $identity_file\""
+else
+	echo "Send symlink step tries to send without automation"
+	identity_line=""
 fi
 
 #We send only symlinks to allow globus to do the real file transfers

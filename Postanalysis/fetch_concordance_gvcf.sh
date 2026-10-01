@@ -10,7 +10,7 @@
 # Usage: fetch_concordance_gvcf.sh -n <sample_name> -o <output_dir> [-c <config_file>] [-l <log_file>]
 #   -n  Sample name (used to locate the GVCF on staging_juno)
 #   -o  Output directory (a Concordance/ subdirectory will be created inside it)
-#   -c  Config file (default: <here_folder>/../.myconf.json)
+#   -c  Config file (see template)
 #   -l  Log file
 #
 # Exit codes:
@@ -25,11 +25,10 @@ usage() {
     1>&2; exit 1
 }
 
-here_folder="$(cd "$(dirname "$0")" && pwd)"
 sample_name=""
 output_dir=""
 log_file=""
-config_file="$here_folder/../.myconf.json"
+config_file=""
 while getopts ":n:o:l:c:" opt; do
     case "${opt}" in
         n)  sample_name="${OPTARG}" ;;
@@ -45,6 +44,18 @@ log_step() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; [ -n "${log_file:-}" ] &&
 if [ -z "$sample_name" ] || [ -z "$output_dir" ]; then
     echo "Error: -n and -o are required."
     usage
+fi
+
+if [[ -z "$config_file" ]]; then
+	config_file="${WGS_CONFIG_FILE:-}"
+fi
+if [[ -z "$config_file" ]]; then
+	echo "No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set." 1>&2
+	usage
+fi
+if [[ ! -f "$config_file" ]]; then
+	echo "Config file not found: $config_file" 1>&2
+	exit 1
 fi
 
 REMOTE_BASE_PREFIX=$(jq -r '.Rclone.short_reads_depot' "$config_file")
