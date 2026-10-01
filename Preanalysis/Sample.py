@@ -13,8 +13,8 @@ class Sample:
 	"""
 	Sample object for patients. Eventually will be separated into Case Class and Sample Class
 	"""
-	def __init__(self, run_id, well, name="", bam_path="", fail_bam="", status={},HPOs="", study="",config_file=os.path.expanduser(".myconf.json")):
-		string_args = {"run_id": run_id, "well": well, "name": name, "bam_path": bam_path,
+	def __init__(self, run_id, well, name="", xml_path="",bam_path="", fail_bam="", status={},HPOs="", study="",config_file=os.path.expanduser(".myconf.json")):
+		string_args = {"run_id": run_id, "well": well, "name": name, "xml_path": xml_path, "bam_path": bam_path,
 			"fail_bam": fail_bam, "HPOs": HPOs, "study": study, "config_file": config_file}
 		for arg_name, arg_value in string_args.items():
 			if not isinstance(arg_value, str):
@@ -22,7 +22,7 @@ class Sample:
 				sys.exit(1)
 
 		self.run_id		=	run_id #ie r84196_20250224_170647
-		configs         = 	Config.from_path(config_file)
+		configs =	Config.from_path(config_file)
 		
 		self.refmaps_path	=	configs.Paths.ref_maps #This is required when writing the samplesheet
 		self.tertiary_path = configs.Paths.tertiary_maps
@@ -30,21 +30,24 @@ class Sample:
 		self.runs_path	=	configs.Paths.run_path
 		self.well		=	well
 		self.sample_path=	self.runs_path + f"{run_id}/{well}"
-		
-
-		if bam_path != "":
-			self.bam_path	=	bam_path
+		self.xml_path	=	xml_path	#Contains metadata (bam paths, barcode, name), should always be included
+		self.bam_path	=	bam_path	#Can be stored and retrieve for samplesheet writing
+		self.fail_bam	=	fail_bam
+  
+		if self.xml_path != "":
+			if not Path(xml_path).exists():
+				logging.warning(f"given xml path was not found: {xml_path}")
+				sys.exit(1)
+			if self.bam_path == "":
+				self.bam_path = self.find_bam_path("hifi")
+			if self.fail_bam == "":
+				self.fail_bam = self.find_bam_path("fail")
 		else:
-			self.bam_path	=	self.find_bam_path()
+			logging.warning(f"xml path is not defined")
+			sys.exit(1)
 
-		#Optionally, we can provide a failed reads bam for TR calling
-		if fail_bam != "":
-			self.fail_bam	=	fail_bam
-		else:
-			self.fail_bam	=	self.find_fail_bam()
+		self.barcode	=	self.find_barcode()
 
-
-		self.barcode	=	self.bam_path.split("/")[-1].split("bc")[-1].removesuffix(".bam")
 		#Sometimes, the name from sequencing is not compatible with the Emedgene name, so it must be given manually.
 		#For example, we receive GMXXXX_redo or GMXXXX_new, while the Emedgene name should be GMXXXX 
 		if name != "":
@@ -87,42 +90,52 @@ class Sample:
 		else:
 			self.study = study
 
-	def find_bam_path(self):
+	def find_bam_path(self, bam_type):
 		"""
 		Obtain the path for the BAM file of the sample. The name varies based on the time of sequencing
-		Returns: Str (File path)
+		The path is found in the sample's XML file
+		Input: Str (type), either 'hifi' or 'fail'
+		Returns: Posix Path
 		"""
-		bam_path = glob.glob(self.sample_path + "/hifi_reads/*bc*.bam")
 
-		if len(bam_path) != 0 and os.path.isfile(bam_path[0]):
-			return bam_path[0]
-		else: 
-			logging.warning(f"Could not find BAM path for sample {self.run_id}/{self.well}")
+		#Type is either hifi or fail. Hifi bam is first, fail bams is third (after hifi index)
+		if bam_type == "hifi":
+			index = 1
+		elif bam_type == "fail":
+			index = 3
+		else:
+			logging.warning(f"Wrong type was used in find_bam_path: {type}")
 			sys.exit(1)
 
-	def find_fail_bam(self):
-		"""
-		Obtain the failed reads . The name varies based on the time of sequencing
-		Returns: Str (File path)
-		"""
-		fail_path = glob.glob(self.sample_path + "/fail_reads/*bc*.bam")
-
-		if len(fail_path) != 0 and os.path.isfile(fail_path[0]):
-			return fail_path[0]
-		else: 
-			logging.warning(f"Could not find failed BAM path for sample {self.run_id}/{self.well}")
-			return ""
+		# The relative path of the hifi bam can be derived from the XML file
+		grep_command_bam = f"grep -oPm{index} \"ResourceId=.*\.bam\" {self.xml_path} | cut -f2 -d'\"' | tail -n1"
+		grep_result_bam = subprocess.run(grep_command_bam, shell=True, capture_output=True, text=True)
+		relative_bam = grep_result_bam.stdout
+		bam	=	Path(f"{Path(self.xml_path).parent}/{relative_bam}".strip())#.resolve()
+		if not bam.exists():
+			logging.warning(f"hifi bam path was not found following xml's relative link: {bam}")
+			sys.exit(1)
+		return bam
 
 
 	def find_name(self):
 		"""
-		Obtain the sample name from its directory. The name can be extracted from a file in the pb_format folder.
+		Obtain the sample name. The name can be extracted from the xml file in pb_format folder.
 		Returns: Str (name) or error
 		"""
-		grep_command = f"grep -o \"BioSample Name=\".*\"\" {self.sample_path}/pb_formats/*_s*.hifi_reads.bc*.consensusreadset.xml | cut -f2 -d'\"' | tr -d '\n'"
+		grep_command = f"grep -o \"BioSample Name=\".*\"\" {self.xml_path} | cut -f2 -d'\"'"
 		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
 		return grep_result.stdout
 	
+	def find_barcode(self):
+		"""
+		Obtain the barcode of the sample The name can be extracted from the xml file file in the pb_format folder.
+		Returns: Str (name) or error
+		"""
+		grep_command = f"grep -o \"DNABarcode Name=\"bc[0-9]{4}\" {self.xml_path} | cut -f2 -d'\"'"
+		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
+		return grep_result.stdout
+ 
 	def get_study_info(self, main_csv_path):
 		"""
 		Reads a main CSV containing study information from sharepoint
@@ -147,7 +160,7 @@ class Sample:
 				for specimen, count in duplicates.items():
 					cohorts = filtered_df.loc[filtered_df["Identifiant : Specimen"] == specimen, "Cohorte"].tolist()
 					cohorts_str = ", ".join(str(c) for c in cohorts)
-					print(f"  - {specimen}: {count} matches (Cohorts: {cohorts_str})", file=sys.stderr)
+					print(f"- {specimen}: {count} matches (Cohorts: {cohorts_str})", file=sys.stderr)
 			cohorte=filtered_df.at[0,"Cohorte"]
 			if pd.isna(cohorte): cohorte = "No Cohort"
 			return cohorte
@@ -248,12 +261,12 @@ class Sample:
 		"""
 		sample_dict={"humanwgs_singleton.sample_id": self.name,\
 			"humanwgs_singleton.sex": (self.case_status["Gender"]).upper(),\
-  			"humanwgs_singleton.hifi_reads": [self.bam_path],\
-  			"humanwgs_singleton.fail_reads": [self.fail_bam],\
+			"humanwgs_singleton.hifi_reads": [self.bam_path],\
+			"humanwgs_singleton.fail_reads": [self.fail_bam],\
 			"humanwgs_singleton.phenotypes": self.phenotypes,\
-  			"humanwgs_singleton.ref_map_file": self.refmaps_path,\
+			"humanwgs_singleton.ref_map_file": self.refmaps_path,\
 			"humanwgs_singleton.tertiary_map_file": self.tertiary_path,\
-  			"humanwgs_singleton.backend": "HPC"}
+			"humanwgs_singleton.backend": "HPC"}
 		
 		sample_file= f"{self.samplesheet_directory}/{self.run_id}_{self.well}_{self.name}.json"
 		print(f"Writing samplesheet to {sample_file}")

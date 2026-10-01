@@ -2,6 +2,7 @@ import sys,os
 import json
 import subprocess
 import argparse
+import logging
 from Sample import Sample
 from pathlib import Path
 from configurator import Config
@@ -28,7 +29,7 @@ if __name__ == "__main__":
 		args.config = os.environ.get('WGS_CONFIG_FILE')
 	if not args.config:
 		parser.error("No explicit config file given (-c) and default config var WGS_CONFIG_FILE is not set. You can set one with 'export WGS_CONFIG_FILE=<path to config file>'")
-	configs  	= Config.from_path(args.config)
+	configs	= Config.from_path(args.config)
 
 	run_path	= configs.Paths.run_path
 	run_folder	= Path(run_path + args.run)
@@ -40,18 +41,49 @@ if __name__ == "__main__":
 
 	#For each well folder, we need to retrieve the sample name from the metadata file
 	for well_folder in directory_list:
+		well = well_folder.name
+		# hifi_bam_matches = list(Path(f"{well_folder}/hifi_reads").glob("*bc*.bam"))
+		# if len(hifi_bam_matches) == 0:
+		# 	sys.exit(f"Error: no *bc*.bam file found in {well_folder}/hifi_reads")
+		# if len(hifi_bam_matches) > 1:
+		# 	sys.exit(f"Error: expected exactly one *bc*.bam file in {well_folder}/hifi_reads, found {len(hifi_bam_matches)}: {[m.name for m in hifi_bam_matches]}")
+		# hifi_prefix = hifi_bam_matches[0].stem
+		# print(f"Hifi_prefix:{hifi_prefix}")
+		
+		xml_matches = list(Path(f"{well_folder}/pb_formats").glob("*.consensusreadset.xml"))
+		if len(xml_matches) != 0:
+			print(f"Found these xml files:\n{str(xml_matches)}")
+		else:
+			sys.exit(f"Expected to find xml files in {well_folder}/pb_formats, found none")
+		
+		# Jasmine and Lima would generate different xml files, use these in priority
 
-		hifi_bam_matches = list(Path(f"{well_folder}/hifi_reads").glob("*bc*.bam"))
-		if len(hifi_bam_matches) == 0:
-			sys.exit(f"Error: no *bc*.bam file found in {well_folder}/hifi_reads")
-		if len(hifi_bam_matches) > 1:
-			sys.exit(f"Error: expected exactly one *bc*.bam file in {well_folder}/hifi_reads, found {len(hifi_bam_matches)}: {[m.name for m in hifi_bam_matches]}")
-		hifi_prefix = hifi_bam_matches[0].stem
-		print(f"Hifi_prefix:{hifi_prefix}")
+		for xml in xml_matches:
+			str_xml=str(xml)
+			if "jasmine" in str_xml or "muxed" in str_xml:
+				print(f"Using special xml:{str_xml}")
+				xml_to_use=xml
+				break
+		else:
+			xml_to_use=Path(f"{well_folder}/pb_formats").glob("*hifi_reads.bc*.consensusreadset.xml")
+			if len(xml_to_use) == 1:
+				xml_to_use=xml_to_use[0]
+				print(f"Using common xml {xml_to_use}")
+			else:
+				sys.exit(f"Unclear which xml files to use:\n{xml_to_use}")
+
+		#jasmine_matches=list(filter(lambda xml:"jasmine" in xml xml_matches))			
+		# if len(hifi_bam_matches) > 1:
+		# 	sys.exit(f"Error: expected exactly one *bc*.bam file in {well_folder}/hifi_reads, found {len(hifi_bam_matches)}: {[m.name for m in hifi_bam_matches]}")
+		# hifi_prefix = hifi_bam_matches[0].stem
+		# print(f"Hifi_prefix:{hifi_prefix}")
+
 		#The sample name is contained in this metadata file, in the pb_format folder		
-		grep_command = f"grep -o \"BioSample Name=\".*\"\" {well_folder}/pb_formats/{hifi_prefix}*.consensusreadset.xml | cut -f2 -d'\"' | tr -d '\n'"
-		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
-		given_name = grep_result.stdout
+		grep_command_name = f"grep -o \"BioSample Name=\".*\"\" {xml_to_use} | cut -f2 -d'\"' | tr -d '\n'"
+		grep_result_name = subprocess.run(grep_command_name, shell=True, capture_output=True, text=True)
+		given_name = grep_result_name.stdout
+
+
 		print(f"Given name:{given_name}")
 		#Special case for Decodeur and Care for rare (C4R) samples
 		if given_name[0:3] == "HSJ" or given_name[0:3] == "C4R":
@@ -82,9 +114,7 @@ if __name__ == "__main__":
 			status = {}
 			study = ""
 
-
-		well = str(well_folder).split("/")[-1]
-		sample = Sample(args.run,well,given_name,status=status,study=study,config_file=args.config)
+		sample = Sample(args.run,well,given_name,status=status,study=study,config_file=args.config,xml_path=str(xml_to_use))
 		sample_list.append(sample)
 
 	if not sample_list:
@@ -101,7 +131,7 @@ if __name__ == "__main__":
 	#Having duplicates would cause problems later
 	existing_list = pd.read_csv(args.list,sep=";",
 		names=["Name","Well","Barcode","run_id","Gender",
-			"Status","Role","HPO","Study","BAM","Affected"])
+			"Status","Role","HPO","Study","XML","Affected"])
 	existing_list = existing_list.where(existing_list.notnull(), "")
 	for sample in sorted_list:
 		skip_append=False
@@ -113,7 +143,7 @@ if __name__ == "__main__":
 					existing_sample_object=Sample(
 					run_id = str(row["run_id"]),
 					well = str(row["Well"]),
-					bam_path = str(row["BAM"]),
+					xml_path = str(row["XML"]),
 					status = {"Status":str(row["Status"]),"Role":str(row["Role"]),
 						"Gender":str(row["Gender"]),"Affected":row["Affected"]},
 					HPOs = str(row["HPO"]).replace(";",","),
@@ -130,4 +160,4 @@ if __name__ == "__main__":
 						print("Writing it to list anyways")
 		if not skip_append:
 			with open(args.list, "a") as fw:
-				fw.write(f"{sample.__str__()};{sample.bam_path};{sample.case_status['Affected']}\n")
+				fw.write(f"{sample.__str__()};{sample.xml_path};{sample.case_status['Affected']}\n")
