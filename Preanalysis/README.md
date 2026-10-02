@@ -131,6 +131,32 @@ The getSamples.py and samplesheet scripts can also be called manually on Fir if 
 
 ---
 
+- **run_lima-remultiplex.sh**
+  - *Usage*:
+    ```bash
+    bash Preanalysis/run_lima-remultiplex.sh -r <run_id> [-c <config_file>]
+    ```
+  - *Goal*: Submits one `Tools/Lima/lima_undo.slurm` job per well/cell of a given run, to undo lima's original on-instrument barcode assignment and remultiplex with the current adapter set. For each well, it locates the hifi_reads consensusreadset XML under `pb_formats/` and submits it; `lima_undo.slurm` handles both the hifi_reads and fail_reads BAMs of the well and, once it succeeds, automatically chains into `Tools/Lima/lima_redo.slurm` to actually re-run `lima` (see [Remultiplexing Tools](#remultiplexing-tools) below). Wells whose `pb_formats` folder is missing, or that have already been fully re-demuxed (both a `hifi_reads` and a `fail_reads` `*.re-demuxed.consensusreadset.xml`), are skipped. Each submission's `--tmp` (node-local scratch) reservation is sized from the actual size of that well's pooled "unassigned" BAMs, since these can be 100GB+ and node-local disk on this cluster is a shared, unreserved pool.
+  - *Outputs*: One Slurm job submitted per well, and a `lima-remultiplex_run_<run_id>.log` file (written next to the script) recording `<cell_folder> job id: <job_id>` for each submission, plus SUCCESS/FAILED lines appended by the chained `lima_undo.slurm`/`lima_redo.slurm` jobs themselves.
+
+---
+
+## Remultiplexing Tools
+
+`Tools/Lima/` contains an Apptainer-based re-implementation of PacBio's `lima-undo` + `lima` remultiplexing workflow (using the `quay.io/pacbio/lima:26.2.1_build3` image), in the same style as the QC tool wrappers documented in the [Postanalysis README](../Postanalysis/README.md#quality-control-tools). Both scripts accept `-l <log_file>` to write SUCCESS/FAILED status to a shared log, and are normally launched by `run_lima-remultiplex.sh` above rather than called directly.
+
+- **lima_undo** (`Tools/Lima/lima_undo.slurm`)
+  - *Usage*: `sbatch Tools/Lima/lima_undo.slurm -x <MOVIE.bcXXXX.consensusreadset.xml> [-c <config_file>] [-l <log_file>]`
+  - *Goal*: Undoes lima's original barcode assignment for a well's hifi_reads and fail_reads BAMs (derives the fail_reads BAM path from the hifi_reads XML), then submits `lima_redo.slurm` on success. Skips straight to submitting `lima_redo.slurm` if a prior run already produced a valid, complete `lima-undo` XML for this well, instead of re-copying and re-processing BAMs that can be 100GB+.
+  - *Outputs*: `<prefix>.lima-undo.consensusreadset.xml` and the corrected `*.lima-undo.bam` BAMs, written next to the input XML.
+
+- **lima_redo** (`Tools/Lima/lima_redo.slurm`)
+  - *Usage*: `sbatch Tools/Lima/lima_redo.slurm -x <MOVIE.bcXXXX.lima-undo.consensusreadset.xml> [-c <config_file>] [-l <log_file>]`
+  - *Goal*: Re-runs `lima` to remultiplex the corrected BAMs produced by `lima_undo.slurm`. Since `lima` only demultiplexes one BAM type per invocation (hifi_reads by default, fail_reads with `--fail-reads-only`), this runs it twice - once per read type - skipping whichever read type a prior run already completed.
+  - *Outputs*: `*.hifi_reads.bc####.re-demuxed.consensusreadset.xml` and `*.fail_reads.bc####.re-demuxed.consensusreadset.xml`, plus per-barcode split BAMs under `bc<N>--bc<M>/` directories, all written next to the input XML.
+
+---
+
 ## Helper modules
 
 These files are imported by the scripts above and are not meant to be called directly.
