@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
+## 2026-10-02: Feat-Lima_remultiplex
+
+### Added
+
+- Added `Tools/Lima/lima_undo.slurm` and `Tools/Lima/lima_redo.slurm`. `lima_undo.slurm` undoes lima's original barcode assignment for both the hifi_reads and fail_reads BAMs of a well, then chains into `lima_redo.slurm` to remultiplex. Since `lima` only demultiplexes one BAM type per invocation (hifi_reads by default, fail_reads only with `--fail-reads-only`), `lima_redo.slurm` runs it twice, once per read type.
+- Added `Preanalysis/run_lima-remultiplex.sh`: submits `lima_undo.slurm` for every well/cell of a given run (same orchestration pattern as `run_jasmine.sh`)
+
 ## 2026-09-11: Fix-default-config
 
 - Changed most instances of "dirname $0" in scripts and "here_folder" in arguments. The behavior of "dirname $0" is not consistent across clusters or node type (compute node or interactive node). Instead, added a required `WGS_folder` config argument in the `Paths`category. It must path to the directory of this repo. This makes the config file mandatory for most Postanalysis scripts, so I highly suggest setting a default config file path using the WGS_CONFIG_FILE environment variable. 
