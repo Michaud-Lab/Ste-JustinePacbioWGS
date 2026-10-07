@@ -23,10 +23,10 @@ This folder also contains a script called "exec_script.sh". It is meant to be in
 
 ---
 
-- **monitor_jobs.sh**
+- **monitor_jobs.slurm**
   - *Usage*:
     ```bash
-    sbatch Analysis/monitor_jobs.sh [interval_seconds] [job_name_filter]
+    sbatch Analysis/monitor_jobs.slurm [interval_seconds] [job_name_filter]
     ```
   - *Goal*: Polls `squeue` at a regular interval while the WGS pipeline instance(s) run, tracking how many jobs are queued/running and how many CPUs/RAM they are allocated. Also tracks the running peak of each of those numbers, so the report log shows the highest concurrency/resource usage reached over the course of the run(s). Meant to help size future submissions against real cluster usage.
   - *Arguments*:

@@ -40,18 +40,19 @@ virtualenv --no-download Tools/ENV
 source Tools/ENV/bin/activate
 pip install --no-index --upgrade pip
 pip install -r Tools/requirements.txt
+export SBATCH_ACCOUNT="<your_slurm_account>"
 cp Analysis/exec_script.sh Tools/ENV/lib/python3.11/site-packages/miniwdl_slurm/scripts/exec_script.sh
 ```
 
 The last step replaces the native miniwdl-slurm exec script with one that uses `$SLURM_TMPDIR`, improving execution time and I/O efficiency on Alliance clusters.
 
-Most bash scripts (`globus_get_run.sh`, `postprocessPart1.sh`, etc.) will install `Tools/ENV` automatically on first run if it does not exist.
+Most bash scripts (`globus_get_run.slurm`, `postprocessPart1.sh`, etc.) will install `Tools/ENV` automatically on first run if it does not exist.
 
 ---
 
 ## Config
 
-The config file follows this format. See `configTemplate.json` for a template. The default location can be defined with `WGS_CONFIG_FILE` as an environment variable. Use `-c` to supply an alternate path for any script.
+The config file follows this format. See `configTemplate.json` for a template. The default location can be defined with `WGS_CONFIG_FILE` as an environment variable (i.e. with `export WGS_CONFIG_FILE="..."` in your command line or .bashrc file). Use `-c` to supply an alternate path for any script.
 
 ```json
 {
@@ -119,11 +120,12 @@ The config file follows this format. See `configTemplate.json` for a template. T
 
 > [!NOTE]
 > For `bioinfo_excel` and `sharepoint_list`, it is impossible to download them directly from the alliance clusters (the API blocks access).
-> Therefore, you need to download the files locally from the URLs, then upload them to the alliance, for example with a scp command (see [Pre-analysis](Preanalysis/README.md) for an example.)
+> Therefore, you need to download the files locally from the URLs, then upload them to the alliance, for example with a scp command. 
+> (See [Pre-analysis](Preanalysis/README.md) for an example.)
 
 ### Transfers fields
 
-The `Transfers` section is used by `Preanalysis/globus_cli_get_run.sh` and `Postanalysis/globus_cli_send.sh`. It describes the three clusters in the workflow:
+The `Transfers` section is used by `Preanalysis/globus_cli_get_run.slurm` and `Postanalysis/globus_cli_send.slurm`. It describes the three clusters in the workflow:
 
 - **Source** (Rorqual): where raw sequencer data lands first
 - **Working** (Fir): where analysis and post-processing run

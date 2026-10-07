@@ -1,6 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=wdl_monitor
-#SBATCH --account=def-rallard
 #SBATCH --time=24:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=256M
@@ -23,7 +22,7 @@
 # NOTE: this reports requested/allocated resources as seen by squeue, not
 # measured (sstat) usage - that's what matters for sizing future submissions.
 #
-# Usage: sbatch monitor_jobs.sh [-c config_file] [interval_seconds] [job_name_filter]
+# Usage: sbatch monitor_jobs.slurm [-c config_file] [interval_seconds] [job_name_filter]
 #   -c config_file   : config file with a Paths.WGS_folder entry. Defaults to
 #                      the WGS_CONFIG_FILE environment variable; if neither is
 #                      set, usage is printed and the script exits.
@@ -38,7 +37,7 @@
 set -uo pipefail
 
 usage() {
-	printf "Usage: sbatch monitor_jobs.sh [-c config_file] [interval_seconds] [job_name_filter]\n
+	printf "Usage: sbatch monitor_jobs.slurm [-c config_file] [interval_seconds] [job_name_filter]\n
  config_file must contain a 'Paths.WGS_folder' entry. If -c is not given, the\n
  WGS_CONFIG_FILE environment variable is used instead (e.g. 'export WGS_CONFIG_FILE=\$SCRATCH/Ste-JustinePacbioWGS/.myconf.json').\n
  There is no built-in default: one of the two must be provided.\n" 1>&2

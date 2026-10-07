@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=rclone_send
 #SBATCH --output=J-%x.%j.out
-#SBATCH --account=def-rallard
 #SBATCH --time=24:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=20G

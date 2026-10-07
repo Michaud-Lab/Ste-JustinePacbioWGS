@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=concordance
 #SBATCH --output=J-%x.%j.out
-#SBATCH --account=def-rallard
 #SBATCH --mem=8G
 #SBATCH --time=05:00:00
 

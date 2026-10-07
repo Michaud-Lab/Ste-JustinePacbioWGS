@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=Globus_get
 #SBATCH --output=J-%x.%j.out
-#SBATCH --account=def-rallard
 #SBATCH --time=8:00:00
 
 # Using the globus CLI, transfers the required runs then runs pre-analysis scripts.

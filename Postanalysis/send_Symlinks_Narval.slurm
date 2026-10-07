@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=multiqc_${family_id}
 #SBATCH --output=J-%x.%j.out
-#SBATCH --account=def-rallard
 #SBATCH --mem=4G
 #SBATCH --time=01:00:00
 

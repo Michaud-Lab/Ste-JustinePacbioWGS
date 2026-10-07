@@ -1,7 +1,6 @@
 #!/bin/bash
 #
 #SBATCH --time=24:00:00
-#SBATCH --account=def-rallard
 #SBATCH --output=J-%x.%j.out
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
