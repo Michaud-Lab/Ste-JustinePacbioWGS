@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
+## 2026-10-27: Fix-Svtopo_zerodiv
+
+### Fixed
+
+- Updated the SVTopo apptainer image from v0.3.0 to v0.3.1 and patched two crashes in `svtopovz` that are still present upstream as of that version:
+  - A `ZeroDivisionError` in `bnd_plotter.py` when a complex SV plot needs exactly `MAX_XTICK_COUNT` (8) windows.
+  - An `FT_Render_Glyph`/"raster overflow" crash in `chain_plotter.py`: a block's chain-panel letter label was positioned using its full, unclipped genomic midpoint even when only one end of that span fell inside the current split window (e.g. a BND connection whose two ends land in different windows), sending the label tens of millions of bp outside the window and overflowing FreeType's rasterizer. The label position is now clamped to the window's own bounds.
+  - Both fixes are applied as `sed` patches in `Tools/SVTopo/svtopo.def` against the cloned `SVTopoVz` source, and the cached image filename was bumped to `svtopo_v0.3.1-1.sif` (in `svtopocall_from_image.slurm` and `postprocessPart1.sh`) to force a rebuild.
+
+### Added
+
+- `Tools/SVTopo/annotate_svtopo_genes.py`: post-processes the SVTopo `index.html`/`app.js` to replace the "Variant IDs" column with the names of genes overlapping each region, based on the Ensembl GFF3 annotation already used for plotting. Wired into `svtopocall_from_image.slurm` to run automatically after each SVTopo job.
+
 ## 2026-10-01: Fix-sbatch_account
 
 - Removed every "--account" from sbatch headers. So far, each slurm job was hardcoded to use the "def-rallard" sbatch account. It is much more portable to let the user set their own SBATCH_ACCOUNT env variable. Also renamed scripts meant to run in slurm jobs as ".slurm" rather than ".sh".
