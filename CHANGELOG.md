@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
+## 2026-10-28: Refactor-GetSamples_altJasmine
+
+- Changed the way Samples objects work. Now, the xml file to use is guessed from the ones found in the pb_format folder. Generally, if the main bam has been processed by jasmine or lima, it will produce a new xml pointing to the new bam files. If such a xml exists, use it and the associated bams. Also brings some changes to jasmine related scripts to keep track of all running samples. 
+
 ## 2026-10-01: Fix-sbatch_account
 
 - Removed every "--account" from sbatch headers. So far, each slurm job was hardcoded to use the "def-rallard" sbatch account. It is much more portable to let the user set their own SBATCH_ACCOUNT env variable. Also renamed scripts meant to run in slurm jobs as ".slurm" rather than ".sh".
