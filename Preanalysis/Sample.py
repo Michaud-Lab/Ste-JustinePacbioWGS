@@ -132,9 +132,9 @@ class Sample:
 		Obtain the barcode of the sample The name can be extracted from the xml file file in the pb_format folder.
 		Returns: Str (name) or error
 		"""
-		grep_command = f"grep -o \"DNABarcode Name=\"bc[0-9]{4}\" {self.xml_path} | cut -f2 -d'\"'"
+		grep_command = f"grep -oE 'DNABarcode Name=\"bc[0-9]{{4}}' {self.xml_path} | awk -F '\"bc' '{{print $2}}'"
 		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
-		return grep_result.stdout
+		return grep_result.stdout.rstrip()
  
 	def get_study_info(self, main_csv_path):
 		"""
