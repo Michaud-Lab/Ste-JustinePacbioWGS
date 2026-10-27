@@ -682,7 +682,7 @@ echo "Launch step time"
 #SVTopo step
 if [ "$include_svtopo" == true ] || [ "$run_all" == true ]; then
 	cp $tools_folder/SVTopo/svtopo_requirements.txt $APPTAINER_CACHEDIR/
-	apptainerGet "svtopo_v0.3.0.sif" $tools_folder/SVTopo/svtopo.def
+	apptainerGet "svtopo_v0.3.1-1.sif" $tools_folder/SVTopo/svtopo.def
 	supporting_reads="$directory/_LAST/out/sv_supporting_reads/${family_id}.joint.GRCh38.structural_variants.supporting_reads.json.gz"
 	
 	echo "Launching SVTopo with Scripts/svtopocall_from_image.slurm" >> "$report_file"

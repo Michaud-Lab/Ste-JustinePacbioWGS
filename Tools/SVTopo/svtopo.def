@@ -9,11 +9,29 @@ From: python:3.11-slim
 		&& apt-get install -y wget
 	python -m venv /app/venv
 	cd /app
-	wget https://github.com/PacificBiosciences/SVTopo/releases/download/v0.3.0/svtopo-v0.3.0-x86_64-unknown-linux-gnu.tar.gz
-	tar -xvzf svtopo-v0.3.0-x86_64-unknown-linux-gnu.tar.gz
-	mv svtopo-v0.3.0-x86_64-unknown-linux-gnu/svtopo /app/venv/bin/
-	rm svtopo-v0.3.0-x86_64-unknown-linux-gnu.tar.gz
-	git clone --branch v0.3.0 https://github.com/PacificBiosciences/SVTopo.git
+	wget https://github.com/PacificBiosciences/SVTopo/releases/download/v0.3.1/svtopo-v0.3.1-x86_64-unknown-linux-gnu.tar.gz
+	tar -xvzf svtopo-v0.3.1-x86_64-unknown-linux-gnu.tar.gz
+	mv svtopo-v0.3.1-x86_64-unknown-linux-gnu/svtopo /app/venv/bin/
+	rm svtopo-v0.3.1-x86_64-unknown-linux-gnu.tar.gz
+	git clone --branch v0.3.1 https://github.com/PacificBiosciences/SVTopo.git
+	# Fix ZeroDivisionError in svtopovz when a complex SV plot needs exactly
+	# MAX_XTICK_COUNT (8) windows: xtick_count hits 0 and is used as a divisor
+	# unguarded. Still present upstream as of v0.3.1.
+	sed -i 's#stepsize = max(1, int(region_size / xtick_count))#stepsize = max(1, int(region_size / max(1, xtick_count)))#' \
+		SVTopo/SVTopoVz/svtopovz/bnd_plotter.py
+	# Fix FT_Render_Glyph "raster overflow" crash in svtopovz: in
+	# plot_reference_blocks_proportionally, a block's chain-panel letter
+	# label is positioned at the midpoint of its full (unclipped) genomic
+	# span, even when only one end of that span falls inside the current
+	# split window (e.g. a BND connection whose two ends land in different
+	# windows). The label's x can then fall tens of millions of bp outside
+	# the window's actual range, which blows up the pixel transform and
+	# overflows FreeType's rasterizer. Clamp the label position to the
+	# window's own bounds. Still present upstream as of v0.3.1.
+	sed -i '408s#.*#                    min(max(block_start + block_len / 2, window.start), window.end),#' \
+		SVTopo/SVTopoVz/svtopovz/chain_plotter.py
+	sed -i '417s#.*#                    min(max(block_start + ((block_len - arrowhead_len) / 2), window.start), window.end),#' \
+		SVTopo/SVTopoVz/svtopovz/chain_plotter.py
 	/app/venv/bin/pip install --upgrade pip
 	/app/venv/bin/pip install --no-cache-dir -r svtopo_requirements.txt
 	wget -O "SVTopo/cnv.excluded_regions.hg38.bed.gz" https://github.com/PacificBiosciences/HiFiCNV/raw/refs/heads/main/data/excluded_regions/cnv.excluded_regions.hg38.bed.gz

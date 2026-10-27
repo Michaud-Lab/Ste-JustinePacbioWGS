@@ -94,7 +94,7 @@ cp "$vcf" "$SLURM_TMPDIR"
 vcf="$(basename $vcf)"
 
 # #This is a home-made image, not hosted on dockerhub for now
-image=$APPTAINER_CACHEDIR/svtopo_v0.3.0.sif
+image=$APPTAINER_CACHEDIR/svtopo_v0.3.1-1.sif
 if [ ! -f $image ]; then
   echo "Building SVTopo apptainer image"
   apptainer build $image $tools_folder/SVTopo/svtopo.def
