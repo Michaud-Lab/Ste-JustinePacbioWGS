@@ -4,7 +4,7 @@
 #SBATCH --output=J-%x.%j.out
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
-#SBATCH --tmp=600G
+#removed line: SBATCH --tmp=600G
 
 set -eo pipefail
 #Argument 1 is MOVIE.bcXXXX.consensusreadset.xml
@@ -26,22 +26,18 @@ declare -A JASMINE_TAGS=(
 )
 
 
-: "${SLURM_TMPDIR:?SLURM_TMPDIR is not set - this script must run inside a Slurm job}"
-
 usage() {
-    echo "Usage: $0 -x <consensusreadset.xml> [-t <jasmine_version>] [-c <config_file>]" 1>&2
+    echo "Usage: $0 -x <consensusreadset.xml> [-t <jasmine_version>] [-c <config_file>] [-o <report_file>]" 1>&2
     exit 1
 }
 JASMINE_VERSION="2.0.0"
 JASMINE_TAG="${JASMINE_TAGS[$JASMINE_VERSION]:-}"
-config_file="$SCRATCH/Ste-JustinePacbioWGS/.myconf.json"
-while getopts "x:t:c:" opt; do
+config_file=""
+report_file=""
+magic_tmpdir=""
+while getopts "x:t:c:o:" opt; do
     case "${opt}" in
 		x)	INXML="${OPTARG}"
-			if [ ! -f "$INXML" ]; then
-				echo "XML file not found"
-				usage
-			fi
 			prefix=$(basename "$INXML" .consensusreadset.xml)
 			pbDir=$(dirname "$INXML")
 			;;
@@ -49,17 +45,42 @@ while getopts "x:t:c:" opt; do
 			JASMINE_TAG="${JASMINE_TAGS[$JASMINE_VERSION]:-}"
             ;;
         c)  config_file="${OPTARG}" ;;
+        o)  report_file="${OPTARG}" ;;
         :)  echo "Error: -${OPTARG} requires an argument."; usage ;;
         *)  usage ;;
     esac
 done
 shift $((OPTIND-1))
 
+# On exit, append this cell's final status to the shared report (-o, written by run_jasmine.sh)
+# and clean up the Magic tmpdir if one was created. Single EXIT trap so neither overrides the other.
+on_exit() {
+	local rc=$?
+	local cell_folder
+	cell_folder=$(dirname "${pbDir:-$PWD/.}")
+	if [ -n "$report_file" ]; then
+		if [ "$rc" -eq 0 ]; then
+			echo "$(date '+%F %T') COMPLETE $cell_folder (job ${SLURM_JOB_ID:-NA}, jasmine $JASMINE_VERSION)" >>"$report_file" || true
+		else
+			echo "$(date '+%F %T') FAILED $cell_folder (job ${SLURM_JOB_ID:-NA}, jasmine $JASMINE_VERSION, exit $rc, last command: $BASH_COMMAND)" >>"$report_file" || true
+		fi
+	fi
+	if [ -n "$magic_tmpdir" ]; then
+		rm -rf "$magic_tmpdir"
+	fi
+}
+trap on_exit EXIT
+# Slurm sends SIGTERM on timeout/scancel; exit explicitly so the EXIT trap still records the failure
+trap 'exit 143' TERM INT
+
 if [ -z "${INXML:-}" ]; then
 	echo "Error: -x <consensusreadset.xml> is required." >&2
 	usage
 fi
-
+if [ ! -f "$INXML" ]; then
+	echo "XML file not found: $INXML" >&2
+	usage
+fi
 
 if [ -z "$JASMINE_TAG" ]; then
   echo "Unknown pbjasmine version '$JASMINE_VERSION'. Known versions: ${!JASMINE_TAGS[*]}" >&2
@@ -77,6 +98,15 @@ if [[ ! -f "$config_file" ]]; then
 	echo "Config file not found: $config_file" 1>&2
 	exit 1
 fi
+
+# Magic's SLURM_TMPDIR has no usable space: use a job-specific dir in $SCRATCH/MAGIC_TMPDIR instead, removed on exit
+if [ "$(jq -r '.Transfers.working_cluster // empty' "$config_file")" == "Magic" ]; then
+	SLURM_TMPDIR="$SCRATCH/MAGIC_TMPDIR/${USER}_${SLURM_JOB_ID:-$$}"
+	mkdir -p "$SLURM_TMPDIR"
+	magic_tmpdir="$SLURM_TMPDIR"  # removed by on_exit
+	echo "Working cluster is Magic, using $SLURM_TMPDIR as SLURM_TMPDIR"
+fi
+: "${SLURM_TMPDIR:?SLURM_TMPDIR is not set - this script must run inside a Slurm job}"
 
 wgs_folder=$(jq -r '.Paths.WGS_folder' "$config_file")
 tools_folder="$wgs_folder/Tools"
@@ -128,7 +158,7 @@ for readType in "ConsensusReadBamFile:hifi_reads" "FailReadBamFile:fail_reads"; 
 	ls -lah "$SLURM_TMPDIR"
 	[ -f "$in_bam.pbi" ] && cp -v "$in_bam.pbi" "$SLURM_TMPDIR/$in_base.pbi"
 	
-	# If jasmine version is 2.0.0, it will not work with SPRQ chemistry.
+	# If jasmine version is 2.0.0, it will not work with SPRQ or SPRQ-NX chemistry.
 	# We need to replace the BINDINGKIT and SEQUENCINGKIT in BAM header
 	# jasmine itself removes any existing MM/ML tags before inference, so no
 	# separate tag-stripping pass is needed here.
@@ -136,13 +166,23 @@ for readType in "ConsensusReadBamFile:hifi_reads" "FailReadBamFile:fail_reads"; 
 		module load samtools/1.22.1
 		# Header files live in $SLURM_TMPDIR, not next to $in_bam: that source
 		# directory is shared/read-only PacBioData storage, not guaranteed writable.
+		old_header_file="$SLURM_TMPDIR/header_$(basename "$in_bam" .bam)_old.txt"
 		new_header_file="$SLURM_TMPDIR/header_$(basename "$in_bam" .bam)_new.txt"
-		samtools view -H "$in_bam" | \
-			sed "s/BINDINGKIT=103-496-900;SEQUENCINGKIT=103-496-700/BINDINGKIT=102-739-100;SEQUENCINGKIT=102-118-800/" \
-			> "$new_header_file"
-		echo "Changing headers for input bam $in_base"
-		# The reheader can only be performed in-place with CRAMs, not BAMs
-		samtools reheader "$new_header_file" "$in_bam" > "$SLURM_TMPDIR/$in_base"
+		samtools view -H "$in_bam" > "$old_header_file"
+		# Kit combinations jasmine 2.0.0 rejects, all mapped to a supported (pre-SPRQ) combination
+		sed -e "s/BINDINGKIT=103-496-900;SEQUENCINGKIT=103-496-700/BINDINGKIT=102-739-100;SEQUENCINGKIT=102-118-800/" \
+			-e "s/BINDINGKIT=103-496-900;SEQUENCINGKIT=103-726-100/BINDINGKIT=102-739-100;SEQUENCINGKIT=102-118-800/" \
+			"$old_header_file" > "$new_header_file"
+		if cmp -s "$old_header_file" "$new_header_file"; then
+			echo "Header of $in_base has no kit combination to replace, copying as-is:"
+			grep -o "BINDINGKIT=[^;]*;SEQUENCINGKIT=[^;]*" "$old_header_file" | sort -u || true
+			cp -v "$in_bam" "$SLURM_TMPDIR/$in_base"
+		else
+			echo "Changing headers for input bam $in_base:"
+			diff "$old_header_file" "$new_header_file" || true
+			# The reheader can only be performed in-place with CRAMs, not BAMs
+			samtools reheader "$new_header_file" "$in_bam" > "$SLURM_TMPDIR/$in_base"
+		fi
 	else
 		echo "Copying $in_base to scratch"
 		cp -v "$in_bam" "$SLURM_TMPDIR/$in_base"

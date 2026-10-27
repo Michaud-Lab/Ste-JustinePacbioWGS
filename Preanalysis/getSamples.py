@@ -42,13 +42,6 @@ if __name__ == "__main__":
 	#For each well folder, we need to retrieve the sample name from the metadata file
 	for well_folder in directory_list:
 		well = well_folder.name
-		# hifi_bam_matches = list(Path(f"{well_folder}/hifi_reads").glob("*bc*.bam"))
-		# if len(hifi_bam_matches) == 0:
-		# 	sys.exit(f"Error: no *bc*.bam file found in {well_folder}/hifi_reads")
-		# if len(hifi_bam_matches) > 1:
-		# 	sys.exit(f"Error: expected exactly one *bc*.bam file in {well_folder}/hifi_reads, found {len(hifi_bam_matches)}: {[m.name for m in hifi_bam_matches]}")
-		# hifi_prefix = hifi_bam_matches[0].stem
-		# print(f"Hifi_prefix:{hifi_prefix}")
 		
 		xml_matches = list(Path(f"{well_folder}/pb_formats").glob("*.consensusreadset.xml"))
 		if len(xml_matches) != 0:
@@ -65,18 +58,12 @@ if __name__ == "__main__":
 				xml_to_use=xml
 				break
 		else:
-			xml_to_use=Path(f"{well_folder}/pb_formats").glob("*hifi_reads.bc*.consensusreadset.xml")
+			xml_to_use=list(Path(f"{well_folder}/pb_formats").glob("*hifi_reads.bc*.consensusreadset.xml"))
 			if len(xml_to_use) == 1:
 				xml_to_use=xml_to_use[0]
 				print(f"Using common xml {xml_to_use}")
 			else:
 				sys.exit(f"Unclear which xml files to use:\n{xml_to_use}")
-
-		#jasmine_matches=list(filter(lambda xml:"jasmine" in xml xml_matches))			
-		# if len(hifi_bam_matches) > 1:
-		# 	sys.exit(f"Error: expected exactly one *bc*.bam file in {well_folder}/hifi_reads, found {len(hifi_bam_matches)}: {[m.name for m in hifi_bam_matches]}")
-		# hifi_prefix = hifi_bam_matches[0].stem
-		# print(f"Hifi_prefix:{hifi_prefix}")
 
 		#The sample name is contained in this metadata file, in the pb_format folder		
 		grep_command_name = f"grep -o \"BioSample Name=\".*\"\" {xml_to_use} | cut -f2 -d'\"' | tr -d '\n'"

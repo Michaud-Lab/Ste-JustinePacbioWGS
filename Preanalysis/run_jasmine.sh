@@ -54,9 +54,12 @@ if [ ! -d "$run_folder" ]; then
 	echo "Run ID folder was not found in $run_folder"
 	exit 1
 fi
-# Tracks which cell folder maps to which submitted Slurm job ID, for later follow-up
+# Tracks which cell folder maps to which submitted Slurm job ID, for later follow-up.
+# Each jasmine.slurm job also appends its own COMPLETE/FAILED line here when it ends (-o).
 overall_job_log="$scripts_folder/jasmine_run_$run_id.log"
  >"$overall_job_log"
+# Jobs run with -D <cell>/pb_formats, so they need an absolute path to the report
+overall_job_log=$(realpath "$overall_job_log")
 for cell_folder in "$run_folder"/*/; do
 	echo "Cell folder: $cell_folder"
 	if [ ! -d "$cell_folder/pb_formats" ]; then
@@ -86,8 +89,8 @@ for cell_folder in "$run_folder"/*/; do
 	fi
 	xml_file="${xml_matches[0]}"
 	echo "$xml_file"
-	echo "sbatch -D $cell_folder/pb_formats $scripts_folder/jasmine.slurm -x $xml_file -t $JASMINE_VERSION -c $config_file"
-	job_id=$(sbatch --parsable -D "$cell_folder/pb_formats" "$scripts_folder/jasmine.slurm" -x "$xml_file" -t "$JASMINE_VERSION" -c "$config_file")
+	echo "sbatch -D $cell_folder/pb_formats $scripts_folder/jasmine.slurm -x $xml_file -t $JASMINE_VERSION -c $config_file -o $overall_job_log"
+	job_id=$(sbatch --parsable -D "$cell_folder/pb_formats" "$scripts_folder/jasmine.slurm" -x "$xml_file" -t "$JASMINE_VERSION" -c "$config_file" -o "$overall_job_log")
 	echo "Submitted job $job_id"
 	echo "$cell_folder job id: $job_id" >>"$overall_job_log"
 done
