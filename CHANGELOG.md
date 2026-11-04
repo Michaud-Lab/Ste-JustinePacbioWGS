@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
 ## [Unreleased]
 
+## 2026-10-02: Feat-Lima_remultiplex
+
+### Added
+
+- Added `Tools/Lima/lima_undo.slurm` and `Tools/Lima/lima_redo.slurm`. `lima_undo.slurm` undoes lima's original barcode assignment for both the hifi_reads and fail_reads BAMs of a well, then chains into `lima_redo.slurm` to remultiplex. Since `lima` only demultiplexes one BAM type per invocation (hifi_reads by default, fail_reads only with `--fail-reads-only`), `lima_redo.slurm` runs it twice, once per read type.
+- Added `Preanalysis/run_lima-remultiplex.sh`: submits `lima_undo.slurm` for every well/cell of a given run (same orchestration pattern as `run_jasmine.sh`)
+
 ## 2026-10-01: Fix-sbatch_account
 
 - Removed every "--account" from sbatch headers. So far, each slurm job was hardcoded to use the "def-rallard" sbatch account. It is much more portable to let the user set their own SBATCH_ACCOUNT env variable. Also renamed scripts meant to run in slurm jobs as ".slurm" rather than ".sh".
