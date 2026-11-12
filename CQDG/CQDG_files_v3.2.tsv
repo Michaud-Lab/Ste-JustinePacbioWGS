@@ -1,0 +1,24 @@
+file_name	file_type	data_type	Per-family or per-sample	Description
+<family>.merged.GRCh38.trgt.vcf.gz	VCF	Tandem Repeats (TRs)	Family	Joint-genotyped TRGT VCF
+<family>.merged.GRCh38.trgt.vcf.gz.tbi	TBI	Variant Calls Index	Family	Joint-genotyped TRGT VCF TBI
+<family>.joint.GRCh38.small_variants.phased.vcf.gz	VCF	Insertions and Deletions (InDels)	Family	Joint-genotyped small variant VCF
+<family>.joint.GRCh38.small_variants.phased.vcf.gz.tbi	TBI	Variant Calls Index	Family	Joint-genotyped small variant VCF TBI
+<family>.joint.GRCh38.structural_variants.phased.vcf.gz	VCF	Structural Variations (SVs) + Copy Number Variations (CNVs)	Family	Joint-genotyped structural variant + copy number VCF
+<family>.joint.GRCh38.structural_variants.phased.vcf.gz.tbi	TBI	Variant Calls Index	Family	Joint-genotyped structural variant + copy number VCF TBI
+<sample>.GRCh38.cpg_pileup.combined.bed.gz	BED	Sequencing Data Supplement	Sample	Single sample combined methylation probabilities BED	cpg_combined_bed
+<sample>.GRCh38.cpg_pileup.combined.bed.gz.tbi	TBI	Variant Calls Index	Sample	Single sample combined methylation probabilities TBI	cpg_combined_bed_index
+<sample>.GRCh38.cpg_pileup.combined.bw	bigWig	IGV	Sample	Single sample combined methylation probabilities BigWig	cpg_combined_bw
+<sample>.GRCh38.cpg_pileup.hap1.bed.gz	BED	Sequencing Data Supplement	Sample	Single sample  haplotype one methylation probabilities BED	cpg_hap1_bed
+<sample>.GRCh38.cpg_pileup.hap1.bed.gz.tbi	TBI	Variant Calls Index	Sample	Single sample haplotype one methylation probabilities BED TBI	cpg_hap1_bed__index
+<sample>.GRCh38.cpg_pileup.hap1.bw	bigWig	IGV	Sample	Single sample haplotype one methylation probabilities bigWig	cpg_hap1_bw
+<sample>.GRCh38.cpg_pileup.hap2.bed.gz	BED	Sequencing Data Supplement	Sample	Single sample haplotype two methylation probabilities BED	cpg_hap2_bed
+<sample>.GRCh38.cpg_pileup.hap2.bed.gz.tbi	TBI	Variant Calls Index	Sample	Single sample haplotype two methylation probabilities BED TBI	cpg_hap2_bed__index
+<sample>.GRCh38.cpg_pileup.hap2.bw	bigWig	IGV	Sample	Single sample haplotype two methylation probabilities bigWig	cpg_hap2_bw
+<sample>.GRCh38.haplotagged.bam	BAM	Aligned Reads	Sample	Single sample haplotagged aligned BAM	merged_haplotagged_bam
+<sample>.GRCh38.haplotagged.bam.bai	BAI	Aligned Reads Index	Sample	Single sample haplotagged aligned BAM BAI	merged_haplotagged_bam_index
+<sample>.GRCh38.small_variants.g.vcf.gz	gVCF	Single Nucleotide Variants (SNVs)	Sample	Single sample small variant gVCF	small_variant_gvcf
+<sample>.GRCh38.small_variants.g.vcf.gz.tbi	TBI	Variant Calls Index	Sample	Single sample small variant gVCF TBI	small_variant_gvcf_index
+<sample>.<family>.joint.GRCh38.structural_variants.phased.vcf.gz	VCF	Structural Variations (SVs) + Copy Number Variations (CNVs)	Sample	Single sample structural variant VCF	phased_sv_vcf
+<sample>.<family>.joint.GRCh38.structural_variants.phased.vcf.gz.tbi	TBI	Variant Calls Index	Sample	Single sample structural variant VCF TBI	phased_sv_vcf_index
+<sample>.GRCh38.trgt.sorted.vcf.gz	VCF	Tandem Repeats (TRs)	Sample	Single sample tandem repeats VCF	phased_trgt_vcf
+<sample>.GRCh38.trgt.sorted.vcf.gz.tbi	TBI	Variant Calls Index	Sample	Single sample tandem repeats VCF TBI	phased_trgt_vcf_index
