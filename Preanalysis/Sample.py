@@ -1,6 +1,7 @@
 import sys,os
+import re
 from pathlib import Path
-import subprocess
+import xml.etree.ElementTree as ET
 import logging
 import glob
 import pandas as pd
@@ -98,43 +99,69 @@ class Sample:
 		Returns: Posix Path
 		"""
 
-		#Type is either hifi or fail. Hifi bam is first, fail bams is third (after hifi index)
+		# The sequencer's XML lists the hifi bam as ConsensusReadBamFile and the fail bam as FailReadBamFile.
+		# A re-demultiplexed (lima) hifi XML only lists the hifi bam: the fail bam is then the
+		# ConsensusReadBamFile of the matching fail_reads XML next to it.
+		xml = Path(self.xml_path)
+		
 		if bam_type == "hifi":
-			index = 1
+			bam = self.bam_from_xml(xml, "ConsensusReadBamFile")
 		elif bam_type == "fail":
-			index = 3
+			bam = self.bam_from_xml(xml, "FailReadBamFile")
+			if bam is None:
+				fail_xml = xml.with_name(xml.name.replace(".hifi_reads.", ".fail_reads.", 1))
+				if fail_xml != xml and fail_xml.exists():
+					bam = self.bam_from_xml(fail_xml, "ConsensusReadBamFile")
 		else:
-			logging.warning(f"Wrong type was used in find_bam_path: {type}")
+			logging.warning(f"Wrong type was used in find_bam_path: {bam_type}")
 			sys.exit(1)
 
-		# The relative path of the hifi bam can be derived from the XML file
-		grep_command_bam = f"grep -oPm{index} \"ResourceId=.*\.bam\" {self.xml_path} | cut -f2 -d'\"' | tail -n1"
-		grep_result_bam = subprocess.run(grep_command_bam, shell=True, capture_output=True, text=True)
-		relative_bam = grep_result_bam.stdout
-		bam	=	Path(f"{Path(self.xml_path).parent}/{relative_bam}".strip())#.resolve()
+		if bam is None:
+			logging.warning(f"No {bam_type} bam found in {xml} (or its matching fail_reads xml)")
+			sys.exit(1)
 		if not bam.exists():
-			logging.warning(f"hifi bam path was not found following xml's relative link: {bam}")
+			logging.warning(f"{bam_type} bam path was not found following xml's relative link: {bam}")
 			sys.exit(1)
 		return bam
 
+	@staticmethod
+	def bam_from_xml(xml, meta_type):
+		"""
+		Return the bam of the given ConsensusReadFile MetaType listed in xml, relative to the xml's folder,
+		or None if the xml lists no such bam.
+		"""
+		root = ET.parse(xml).getroot()
+		for el in root.iter():
+			if (el.tag.endswith("}ExternalResource")
+				and el.get("MetaType") == f"PacBio.ConsensusReadFile.{meta_type}"):
+				match = el.get("ResourceId", "")
+				break
+		return xml.parent / match
 
 	def find_name(self):
 		"""
 		Obtain the sample name. The name can be extracted from the xml file in pb_format folder.
 		Returns: Str (name) or error
 		"""
-		grep_command = f"grep -o \"BioSample Name=\".*\"\" {self.xml_path} | cut -f2 -d'\"'"
-		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
-		return grep_result.stdout
-	
+		xml = Path(self.xml_path)
+		root = ET.parse(self.xml).getroot()
+		raw_name = root.get("Name", "")
+		reg = re.search(r"\(([^)]*)\)", raw_name)
+		given_name = reg.group(1) if reg else ""
+		return given_name
+
 	def find_barcode(self):
 		"""
 		Obtain the barcode of the sample The name can be extracted from the xml file file in the pb_format folder.
 		Returns: Str (name) or error
 		"""
-		grep_command = f"grep -oE 'DNABarcode Name=\"bc[0-9]{{4}}' {self.xml_path} | awk -F '\"bc' '{{print $2}}'"
-		grep_result = subprocess.run(grep_command, shell=True, capture_output=True, text=True)
-		return grep_result.stdout.rstrip()
+		xml = Path(self.xml_path)
+		root = ET.parse(xml).getroot()
+		for el in root.iter():
+			if el.tag.endswith("}DNABarcode"):
+				barcode = el.get("Name", "").split("--")[0]
+				break
+		return barcode
  
 	def get_study_info(self, main_csv_path):
 		"""

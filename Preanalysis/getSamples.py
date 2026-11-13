@@ -1,6 +1,7 @@
 import sys,os
+import re
 import json
-import subprocess
+import xml.etree.ElementTree as ET
 import argparse
 import logging
 from Sample import Sample
@@ -14,6 +15,36 @@ Give the run name (ie r84196_20250210_150130) as argument and a config file, opt
 the run folder must be present in the run_path specified in the config file (see ../.myconf.json for an example)
 Will write the retrieved samples to a sample list that will be used to write the samplesheets
 """
+def select_xml(pb_formats):
+	"""
+	Pick the hifi_reads consensusreadset XML to use for a well.
+	A re-run demultiplexing (lima) writes its XMLs under pb_formats/bc*/: when present, only those are considered.
+	Then, by priority: re-demultiplexed + jasmine, jasmine, re-demultiplexed, the sequencer's original XML.
+	Exits if no XML is found or if the highest priority level holds more than one XML.
+	"""
+	xml_matches = list(pb_formats.glob("bc*/*.hifi_reads.bc*.consensusreadset.xml"))
+	if not xml_matches:
+		xml_matches = list(pb_formats.glob("*.hifi_reads.bc*.consensusreadset.xml"))
+	if not xml_matches:
+		sys.exit(f"Expected to find hifi_reads xml files in {pb_formats} or {pb_formats}/bc*/, found none")
+	print(f"Found these xml files:\n{[str(x) for x in xml_matches]}")
+
+	priorities = [
+		("re-demultiplexed jasmine", lambda n: ".re-demuxed." in n and ".jasmine." in n),
+		("jasmine", lambda n: ".jasmine." in n),
+		("re-demultiplexed", lambda n: ".re-demuxed." in n),
+		("common", lambda n: re.fullmatch(r".*\.hifi_reads\.bc\d{4}\.consensusreadset\.xml", n) is not None),
+	]
+	for label, matches in priorities:
+		candidates = [x for x in xml_matches if matches(x.name)]
+		if len(candidates) == 1:
+			print(f"Using {label} xml: {candidates[0]}")
+			return candidates[0]
+		if len(candidates) > 1:
+			sys.exit(f"Unclear which {label} xml file to use:\n{[str(x) for x in candidates]}")
+	sys.exit(f"None of the xml files in {pb_formats} match a known type:\n{[str(x) for x in xml_matches]}")
+
+
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser(
@@ -43,33 +74,13 @@ if __name__ == "__main__":
 	for well_folder in directory_list:
 		well = well_folder.name
 		
-		xml_matches = list(Path(f"{well_folder}/pb_formats").glob("*.consensusreadset.xml"))
-		if len(xml_matches) != 0:
-			print(f"Found these xml files:\n{str(xml_matches)}")
-		else:
-			sys.exit(f"Expected to find xml files in {well_folder}/pb_formats, found none")
-		
-		# Jasmine and Lima would generate different xml files, use these in priority
-
-		for xml in xml_matches:
-			str_xml=str(xml)
-			if "jasmine" in str_xml or "muxed" in str_xml:
-				print(f"Using special xml:{str_xml}")
-				xml_to_use=xml
-				break
-		else:
-			xml_to_use=list(Path(f"{well_folder}/pb_formats").glob("*hifi_reads.bc*.consensusreadset.xml"))
-			if len(xml_to_use) == 1:
-				xml_to_use=xml_to_use[0]
-				print(f"Using common xml {xml_to_use}")
-			else:
-				sys.exit(f"Unclear which xml files to use:\n{xml_to_use}")
+		xml_to_use = select_xml(Path(f"{well_folder}/pb_formats"))
 
 		#The sample name is contained in this metadata file, in the pb_format folder		
-		grep_command_name = f"grep -o \"BioSample Name=\".*\"\" {xml_to_use} | cut -f2 -d'\"' | tr -d '\n'"
-		grep_result_name = subprocess.run(grep_command_name, shell=True, capture_output=True, text=True)
-		given_name = grep_result_name.stdout
-
+		root = ET.parse(xml_to_use).getroot()
+		raw_name = root.get("Name", "")
+		reg = re.search(r"\(([^)]*)\)", raw_name)
+		given_name = reg.group(1) if reg else ""
 
 		print(f"Given name:{given_name}")
 		#Special case for Decodeur and Care for rare (C4R) samples

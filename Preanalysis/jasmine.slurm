@@ -56,8 +56,8 @@ shift $((OPTIND-1))
 # and clean up the Magic tmpdir if one was created. Single EXIT trap so neither overrides the other.
 on_exit() {
 	local rc=$?
-	local cell_folder
-	cell_folder=$(dirname "${pbDir:-$PWD/.}")
+	# Folder holding the input XML (<cell>/pb_formats, or <cell>/pb_formats/bc*/ when re-demultiplexed)
+	local cell_folder="${pbDir:-$PWD}"
 	if [ -n "$report_file" ]; then
 		if [ "$rc" -eq 0 ]; then
 			echo "$(date '+%F %T') COMPLETE $cell_folder (job ${SLURM_JOB_ID:-NA}, jasmine $JASMINE_VERSION)" >>"$report_file" || true
@@ -146,49 +146,74 @@ for readType in "ConsensusReadBamFile:hifi_reads" "FailReadBamFile:fail_reads"; 
 	metaType=${readType%%:*}
 	dirName=${readType##*:}
 
-	# Extract relative path in xml
-	rel=$(grep -oP "MetaType=\"PacBio\.ConsensusReadFile\.${metaType}\"[^>]*ResourceId=\"\K[^\"]+\.bam" "$INXML")
+	# Extract relative path in xml. The sequencer's XML lists both BAMs (hifi as ConsensusReadBamFile,
+	# fail as FailReadBamFile) and the jasmine BAMs are written back into $outxml.
+	src_xml="$INXML"
+	pass_outxml="$outxml"
+	rel=$(grep -oP "MetaType=\"PacBio\.ConsensusReadFile\.${metaType}\"[^>]*ResourceId=\"\K[^\"]+\.bam" "$src_xml" || true)
+	# A re-demultiplexed (lima) hifi XML only lists the hifi BAM: the fail BAM is in the matching
+	# fail_reads XML next to it, as its ConsensusReadBamFile, and gets its own .jasmine XML.
+	if [ -z "$rel" ] && [ "$dirName" == "fail_reads" ]; then
+		src_xml="$pbDir/$(basename "$INXML" | sed 's/\.hifi_reads\./.fail_reads./')"
+		if [ ! -f "$src_xml" ] || [ "$src_xml" == "$INXML" ]; then
+			echo "Error: no FailReadBamFile in $INXML and no matching fail_reads XML found ($src_xml)" >&2
+			exit 1
+		fi
+		pass_outxml="$pbDir/$(basename "$src_xml" .consensusreadset.xml).jasmine.consensusreadset.xml"
+		cp -v "$src_xml" "$pass_outxml"
+		rel=$(grep -oP "MetaType=\"PacBio\.ConsensusReadFile\.ConsensusReadBamFile\"[^>]*ResourceId=\"\K[^\"]+\.bam" "$src_xml" || true)
+	fi
+	if [ -z "$rel" ]; then
+		echo "Error: no $dirName BAM listed in $src_xml" >&2
+		exit 1
+	fi
 	echo "Readtype: $readType"
+	echo "Source XML: $(basename "$src_xml")"
 	echo "Rel: $rel"
-	#unassigned_rel=${rel/$barcode/unassigned}
-	in_bam=$(realpath -m "$pbDir/$rel") #$(realpath -m "$pbDir/$unassigned_rel")
+	in_bam=$(realpath -m "$pbDir/$rel")
 	in_base=$(basename "$in_bam")
 	out_base="${in_base%.bam}.jasminev2.bam"
 
-	ls -lah "$SLURM_TMPDIR"
-	[ -f "$in_bam.pbi" ] && cp -v "$in_bam.pbi" "$SLURM_TMPDIR/$in_base.pbi"
-	
-	# If jasmine version is 2.0.0, it will not work with SPRQ or SPRQ-NX chemistry.
-	# We need to replace the BINDINGKIT and SEQUENCINGKIT in BAM header
-	# jasmine itself removes any existing MM/ML tags before inference, so no
-	# separate tag-stripping pass is needed here.
-	if [ "$JASMINE_TAG" == "2.0.0" ]; then
-		module load samtools/1.22.1
-		# Header files live in $SLURM_TMPDIR, not next to $in_bam: that source
-		# directory is shared/read-only PacBioData storage, not guaranteed writable.
-		old_header_file="$SLURM_TMPDIR/header_$(basename "$in_bam" .bam)_old.txt"
-		new_header_file="$SLURM_TMPDIR/header_$(basename "$in_bam" .bam)_new.txt"
-		samtools view -H "$in_bam" > "$old_header_file"
-		# Kit combinations jasmine 2.0.0 rejects, all mapped to a supported (pre-SPRQ) combination
-		sed -e "s/BINDINGKIT=103-496-900;SEQUENCINGKIT=103-496-700/BINDINGKIT=102-739-100;SEQUENCINGKIT=102-118-800/" \
-			-e "s/BINDINGKIT=103-496-900;SEQUENCINGKIT=103-726-100/BINDINGKIT=102-739-100;SEQUENCINGKIT=102-118-800/" \
-			"$old_header_file" > "$new_header_file"
-		if cmp -s "$old_header_file" "$new_header_file"; then
-			echo "Header of $in_base has no kit combination to replace, copying as-is:"
-			grep -o "BINDINGKIT=[^;]*;SEQUENCINGKIT=[^;]*" "$old_header_file" | sort -u || true
-			cp -v "$in_bam" "$SLURM_TMPDIR/$in_base"
-		else
-			echo "Changing headers for input bam $in_base:"
-			diff "$old_header_file" "$new_header_file" || true
-			# The reheader can only be performed in-place with CRAMs, not BAMs
-			samtools reheader "$new_header_file" "$in_bam" > "$SLURM_TMPDIR/$in_base"
-		fi
+	# Touched once this pass's jasmine BAM is fully copied back, so a re-run after a later
+	# failure (e.g. in fail_reads) does not redo a pass that already succeeded.
+	pass_marker="$pbDir/.jasmine_${JASMINE_VERSION}.${dirName}.done"
+	if [ -f "$pass_marker" ] && [ -f "$pbDir/$out_base" ]; then
+		echo "$dirName already processed ($pass_marker), reusing $pbDir/$out_base"
 	else
-		echo "Copying $in_base to scratch"
-		cp -v "$in_bam" "$SLURM_TMPDIR/$in_base"
-	fi
-	echo "Running Jasmine command:"
-	cat << EOF
+		ls -lah "$SLURM_TMPDIR"
+		[ -f "$in_bam.pbi" ] && cp -v "$in_bam.pbi" "$SLURM_TMPDIR/$in_base.pbi"
+	
+		# If jasmine version is 2.0.0, it will not work with SPRQ or SPRQ-NX chemistry.
+		# We need to replace the BINDINGKIT and SEQUENCINGKIT in BAM header
+		# jasmine itself removes any existing MM/ML tags before inference, so no
+		# separate tag-stripping pass is needed here.
+		if [ "$JASMINE_TAG" == "2.0.0" ]; then
+			module load samtools/1.22.1
+			# Header files live in $SLURM_TMPDIR, not next to $in_bam: that source
+			# directory is shared/read-only PacBioData storage, not guaranteed writable.
+			old_header_file="$SLURM_TMPDIR/header_$(basename "$in_bam" .bam)_old.txt"
+			new_header_file="$SLURM_TMPDIR/header_$(basename "$in_bam" .bam)_new.txt"
+			samtools view -H "$in_bam" > "$old_header_file"
+			# Kit combinations jasmine 2.0.0 rejects, all mapped to a supported (pre-SPRQ) combination
+			sed -e "s/BINDINGKIT=103-496-900;SEQUENCINGKIT=103-496-700/BINDINGKIT=102-739-100;SEQUENCINGKIT=102-118-800/" \
+				-e "s/BINDINGKIT=103-496-900;SEQUENCINGKIT=103-726-100/BINDINGKIT=102-739-100;SEQUENCINGKIT=102-118-800/" \
+				"$old_header_file" > "$new_header_file"
+			if cmp -s "$old_header_file" "$new_header_file"; then
+				echo "Header of $in_base has no kit combination to replace, copying as-is:"
+				grep -o "BINDINGKIT=[^;]*;SEQUENCINGKIT=[^;]*" "$old_header_file" | sort -u || true
+				cp -v "$in_bam" "$SLURM_TMPDIR/$in_base"
+			else
+				echo "Changing headers for input bam $in_base:"
+				diff "$old_header_file" "$new_header_file" || true
+				# The reheader can only be performed in-place with CRAMs, not BAMs
+				samtools reheader "$new_header_file" "$in_bam" > "$SLURM_TMPDIR/$in_base"
+			fi
+		else
+			echo "Copying $in_base to scratch"
+			cp -v "$in_bam" "$SLURM_TMPDIR/$in_base"
+		fi
+		echo "Running Jasmine command:"
+		cat << EOF
 "$SLURM_TMPDIR"/jasmine \
 -j "$THREADS" \
 --log-level DEBUG \
@@ -196,21 +221,29 @@ for readType in "ConsensusReadBamFile:hifi_reads" "FailReadBamFile:fail_reads"; 
 "$SLURM_TMPDIR/$in_base" \
 "$SLURM_TMPDIR/$out_base"
 EOF
-	"$SLURM_TMPDIR"/jasmine \
-		-j "$THREADS" \
-		--log-level DEBUG \
-		--log-file "$pbDir/jasmine.$dirName.log" \
-		"$SLURM_TMPDIR/$in_base" \
-		"$SLURM_TMPDIR/$out_base"
+		"$SLURM_TMPDIR"/jasmine \
+			-j "$THREADS" \
+			--log-level DEBUG \
+			--log-file "$pbDir/jasmine.$dirName.log" \
+			"$SLURM_TMPDIR/$in_base" \
+			"$SLURM_TMPDIR/$out_base"
 
-	echo "Copying results back for $dirName"
-	#mv -v "$SLURM_TMPDIR/jasmine.$dirName.log" "$pbDir/jasmine.$dirName.log"
-	cp -v "$SLURM_TMPDIR/$out_base" "$pbDir/$out_base"
-	[ -f "$SLURM_TMPDIR/$out_base.pbi" ] && cp -v "$SLURM_TMPDIR/$out_base.pbi" "$pbDir/$out_base.pbi"
+		echo "Copying results back for $dirName"
+		#mv -v "$SLURM_TMPDIR/jasmine.$dirName.log" "$pbDir/jasmine.$dirName.log"
+		cp -v "$SLURM_TMPDIR/$out_base" "$pbDir/$out_base"
+		[ -f "$SLURM_TMPDIR/$out_base.pbi" ] && cp -v "$SLURM_TMPDIR/$out_base.pbi" "$pbDir/$out_base.pbi"
 
-	# Point the output XML at the new local (same-directory) jasmine BAM instead of the old
-	# ../$dirName/ path, so it no longer resolves outside of $pbDir.
-	sed -i "s,ResourceId=\"\.\./${dirName}/${in_base}\",ResourceId=\"./${out_base}\",g; s,ResourceId=\"\.\./${dirName}/${in_base}\.pbi\",ResourceId=\"./${out_base}\.pbi\",g" "$outxml"
+		touch "$pass_marker"
+	fi
+
+	# Point the output XML at the new local (same-directory) jasmine BAM, whatever form the original
+	# path had (../$dirName/<bam> for the sequencer's XML, a bare <bam> for re-demultiplexed ones).
+	rel_re=$(printf '%s' "$rel" | sed 's/[][\\.*^$,]/\\&/g')
+	sed -i "s,ResourceId=\"${rel_re}\",ResourceId=\"./${out_base}\",g; s,ResourceId=\"${rel_re}\.pbi\",ResourceId=\"./${out_base}.pbi\",g" "$pass_outxml"
+	if ! grep -q "ResourceId=\"./${out_base}\"" "$pass_outxml"; then
+		echo "Error: could not point $(basename "$pass_outxml") at $out_base" >&2
+		exit 1
+	fi
 
 	# Free scratch space before the next read type
 	rm -f "$SLURM_TMPDIR/$in_base" "$SLURM_TMPDIR/$in_base.pbi" "$SLURM_TMPDIR/$out_base" "$SLURM_TMPDIR/$out_base.pbi"
