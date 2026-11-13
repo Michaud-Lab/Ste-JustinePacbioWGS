@@ -54,9 +54,12 @@ if [ ! -d "$run_folder" ]; then
 	echo "Run ID folder was not found in $run_folder"
 	exit 1
 fi
-# Tracks which cell folder maps to which submitted Slurm job ID, for later follow-up
+# Tracks which cell folder maps to which submitted Slurm job ID, for later follow-up.
+# Each jasmine.slurm job also appends its own COMPLETE/FAILED line here when it ends (-o).
 overall_job_log="$scripts_folder/jasmine_run_$run_id.log"
  >"$overall_job_log"
+# Jobs run with -D <cell>/pb_formats, so they need an absolute path to the report
+overall_job_log=$(realpath "$overall_job_log")
 for cell_folder in "$run_folder"/*/; do
 	echo "Cell folder: $cell_folder"
 	if [ ! -d "$cell_folder/pb_formats" ]; then
@@ -64,30 +67,42 @@ for cell_folder in "$run_folder"/*/; do
 		continue
 	fi
 
-	# jasmine.slurm touches this marker only after it fully succeeds for this version;
-	# skip cells that were already launched and completed successfully.
-	done_marker="$cell_folder/pb_formats/.jasmine_${JASMINE_VERSION}.done"
-	if [ -f "$done_marker" ]; then
-		echo "Cell $cell_folder already completed for jasmine $JASMINE_VERSION. Skipping"
-		continue
-	fi
-
-	# The consensusreadset XML name embeds the well's barcode (bcXXXX); there should be exactly one per well
+	# The consensusreadset XML name embeds the well's barcode (bcXXXX); there should be exactly one per well.
+	# A re-run demultiplexing writes its XML under pb_formats/bc*/: when present, it takes priority.
+	# jasmine.slurm's own output (*.jasmine.consensusreadset.xml) is not an input, so it is ignored.
 	shopt -s nullglob
-	xml_matches=("$cell_folder/pb_formats"/*.hifi_reads.bc[0-9][0-9][0-9][0-9].consensusreadset.xml)
+	xml_matches=()
+	for xml in "$cell_folder/pb_formats"/bc*/*.hifi_reads.bc[0-9][0-9][0-9][0-9].*consensusreadset.xml; do
+		[[ "$xml" == *.jasmine.consensusreadset.xml ]] || xml_matches+=("$xml")
+	done
+	xml_dir="$cell_folder/pb_formats/bc*"
+	if [ "${#xml_matches[@]}" -eq 0 ]; then
+		for xml in "$cell_folder/pb_formats"/*.hifi_reads.bc[0-9][0-9][0-9][0-9].*consensusreadset.xml; do
+			[[ "$xml" == *.jasmine.consensusreadset.xml ]] || xml_matches+=("$xml")
+		done
+		xml_dir="$cell_folder/pb_formats"
+	fi
 	shopt -u nullglob
 	if [ "${#xml_matches[@]}" -eq 0 ]; then
 		echo "Error: no hifi_reads consensusreadset XML found in $cell_folder/pb_formats. Skipping"
 		continue
 	fi
 	if [ "${#xml_matches[@]}" -gt 1 ]; then
-		echo "Error: expected exactly one hifi_reads consensusreadset XML in $cell_folder/pb_formats, found ${#xml_matches[@]}: ${xml_matches[*]}. Skipping"
+		echo "Error: expected exactly one hifi_reads consensusreadset XML in $xml_dir, found ${#xml_matches[@]}: ${xml_matches[*]}. Skipping"
 		continue
 	fi
 	xml_file="${xml_matches[0]}"
+
+	# jasmine.slurm touches this marker next to its input XML only after it fully succeeds for this version;
+	# skip cells that were already launched and completed successfully.
+	done_marker="$(dirname "$xml_file")/.jasmine_${JASMINE_VERSION}.done"
+	if [ -f "$done_marker" ]; then
+		echo "Cell $cell_folder already completed for jasmine $JASMINE_VERSION ($done_marker). Skipping"
+		continue
+	fi
 	echo "$xml_file"
-	echo "sbatch -D $cell_folder/pb_formats $scripts_folder/jasmine.slurm -x $xml_file -t $JASMINE_VERSION -c $config_file"
-	job_id=$(sbatch --parsable -D "$cell_folder/pb_formats" "$scripts_folder/jasmine.slurm" -x "$xml_file" -t "$JASMINE_VERSION" -c "$config_file")
+	echo "sbatch -D $cell_folder/pb_formats $scripts_folder/jasmine.slurm -x $xml_file -t $JASMINE_VERSION -c $config_file -o $overall_job_log"
+	job_id=$(sbatch --parsable -D "$cell_folder/pb_formats" "$scripts_folder/jasmine.slurm" -x "$xml_file" -t "$JASMINE_VERSION" -c "$config_file" -o "$overall_job_log")
 	echo "Submitted job $job_id"
 	echo "$cell_folder job id: $job_id" >>"$overall_job_log"
 done

@@ -28,7 +28,7 @@ def retrieve_samples(full_list,sample_ID):
 	sample_row["run_id"].values[0],
 	sample_row["Well"].values[0],
 	name=sample_row["Name"].values[0],
-	bam_path=sample_row["BAM"].values[0],
+	xml_path=sample_row["XML"].values[0],
 	status={
 		"Status":sample_row["Status"].values[0], 
 		"Role":sample_row["Role"].values[0], 
@@ -71,7 +71,7 @@ if __name__ == "__main__":
 		family_ids.append(args.father)
 	
 	#Find the samples from the list
-	sample_list = pd.read_csv(args.list,sep=";",names=["Name","Well","Barcode","run_id","Gender","Status","Role","HPO","Study","BAM","Affected"])
+	sample_list = pd.read_csv(args.list,sep=";",names=["Name","Well","Barcode","run_id","Gender","Status","Role","HPO","Study","XML","Affected"])
 	sample_list = sample_list.replace({np.nan: ""})
 	family={}
 	for sample_id in family_ids:

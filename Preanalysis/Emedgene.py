@@ -4,6 +4,7 @@ import logging
 import json
 import re
 from configurator import Config
+from pathlib import Path
 
 class Emedgene:
     """
@@ -132,6 +133,9 @@ class Emedgene:
         """
         hpo_list = []
         db_tsv = self.database_tsv
+        if not Path(db_tsv).is_file():
+            logging.warning(f"Phenotips database in config not specified or not found: {db_tsv}")
+            return ""
         if pheno_id is None or len(pheno_id) == 0:
             logging.warning(f"Phenotips ID is empty or None")
             return ""
